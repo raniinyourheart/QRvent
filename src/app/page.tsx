@@ -852,7 +852,7 @@ export default function QRevntLanding() {
       {/* ══ FOOTER ══ */}
       <footer className="footer">
         <div className="footer-logo">QR<span>evnt</span></div>
-        <div>© 2025 QRevnt · Politeknik Negeri Batam · Tim Yalal Wathon</div>
+        <div>© 2026 QRevnt · Politeknik Negeri Batam · Tim Udang Keju Mang</div>
         <div>SDG 9 &amp; SDG 17</div>
       </footer>
     </>

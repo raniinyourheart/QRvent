@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import QRCode from "qrcode";
@@ -13,8 +13,6 @@ import {
   Tag,
   Save,
   Eye,
-  Globe,
-  Lock,
   Sparkles,
   CheckCircle,
   AlertCircle,
@@ -24,10 +22,10 @@ import {
   X,
   FileSpreadsheet,
   Trash2,
-  Plus,
 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
+import api from "@/lib/api";
 
 // Tema warna untuk event
 const eventThemes = [
@@ -48,13 +46,10 @@ const eventTypes = [
   { id: "community", name: "Komunitas", icon: "👥" },
 ];
 
-// Domain email suggestion
-const emailDomains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com"];
-
 export default function CreateEventPage() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [userName, setUserName] = useState("EO");
+  const [userName, setUserName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showGuestModal, setShowGuestModal] = useState(false);
@@ -85,6 +80,34 @@ export default function CreateEventPage() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const today = new Date().toISOString().split("T")[0];
+
+  // Helper: cek apakah jam yang dipilih sudah lewat
+  const isTimeValid = (date: string, time: string) => {
+    if (!date || !time) return true;
+    
+    const selectedDate = new Date(date);
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    
+    // Jika tanggal yang dipilih adalah hari ini
+    if (selectedDate.getTime() === todayDate.getTime()) {
+      const now = new Date();
+      const selectedTime = new Date(`${date}T${time}`);
+      return selectedTime >= now;
+    }
+    return true;
+  };
+
+  // Ambil user login
+  useEffect(() => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      const userData = JSON.parse(user);
+      setUserName(userData.name || userData.username || "EO");
+    } else {
+      router.push("/login");
+    }
+  }, [router]);
 
   // Template Excel untuk download
   const downloadTemplate = () => {
@@ -130,7 +153,7 @@ export default function CreateEventPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // Generate QR massal untuk semua tamu
+  // Generate QR massal dan simpan ke API
   const generateAllQR = async () => {
     if (excelData.length === 0) {
       alert("Tidak ada data tamu! Silahkan import Excel terlebih dahulu.");
@@ -141,24 +164,38 @@ export default function CreateEventPage() {
     const guestsWithQR = [];
     
     for (const guest of excelData) {
+      const qrCode = `QR${Date.now()}${Math.floor(Math.random() * 10000)}`;
       const qrData = JSON.stringify({
         guestId: Date.now() + Math.random(),
         guestName: guest.name,
         guestEmail: guest.email,
         eventId: createdEvent?.id,
         eventName: createdEvent?.name,
-        qrCode: `QR${Date.now()}${Math.floor(Math.random() * 10000)}`,
+        qrCode: qrCode,
       });
       
       const qrImage = await QRCode.toDataURL(qrData, {
         width: 200,
         margin: 1,
-        color: { dark: "#7c3aed", light: "#ffffff" },
+        color: { dark: "#3b82f6", light: "#ffffff" },
       });
+      
+      try {
+        await api.post("/guests", {
+          eventId: createdEvent.id,
+          name: guest.name,
+          email: guest.email,
+          phone: guest.phone,
+          qrCode: qrCode,
+        });
+      } catch (error) {
+        console.error("Error saving guest:", error);
+      }
       
       guestsWithQR.push({
         ...guest,
         qrImage,
+        qrCode,
         generatedAt: new Date().toISOString(),
       });
     }
@@ -176,19 +213,30 @@ export default function CreateEventPage() {
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
+    
     if (!formData.name.trim()) newErrors.name = "Nama event harus diisi";
     if (!formData.date) newErrors.date = "Tanggal event harus diisi";
     if (formData.date < today) newErrors.date = "Tidak bisa membuat event di tanggal yang sudah lewat!";
-    if (!formData.startTime) newErrors.startTime = "Waktu mulai harus diisi";
-    if (!formData.endTime) newErrors.endTime = "Waktu selesai harus diisi";
+    
+    if (!formData.startTime) {
+      newErrors.startTime = "Waktu mulai harus diisi";
+    } else if (formData.date === today && !isTimeValid(formData.date, formData.startTime)) {
+      newErrors.startTime = "Tidak bisa memilih jam yang sudah lewat!";
+    }
+    
+    if (!formData.endTime) {
+      newErrors.endTime = "Waktu selesai harus diisi";
+    }
+    
     if (!formData.location.trim()) newErrors.location = "Lokasi harus diisi";
     if (formData.capacity < 1) newErrors.capacity = "Kapasitas minimal 1";
     if (!formData.description.trim()) newErrors.description = "Deskripsi event harus diisi";
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -196,20 +244,31 @@ export default function CreateEventPage() {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      const newEvent = {
-        id: Date.now(),
-        ...formData,
-        createdAt: new Date().toISOString(),
-        guests: [],
-      };
-      const existingEvents = JSON.parse(localStorage.getItem("events") || "[]");
-      existingEvents.push(newEvent);
-      localStorage.setItem("events", JSON.stringify(existingEvents));
-      setCreatedEvent(newEvent);
+    
+    try {
+      const response = await api.post("/events", {
+        name: formData.name,
+        type: formData.type,
+        theme: formData.theme,
+        date: formData.date,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        location: formData.location,
+        locationType: formData.locationType,
+        capacity: formData.capacity,
+        description: formData.description,
+        isPublic: formData.isPublic,
+      });
+      
+      const newEvent = response.data;
+      setCreatedEvent({ id: newEvent.id, name: formData.name });
       setIsSubmitting(false);
       setShowGuestModal(true);
-    }, 1000);
+    } catch (error: any) {
+      console.error("Error creating event:", error);
+      alert(error.response?.data?.message || "Gagal membuat event!");
+      setIsSubmitting(false);
+    }
   };
 
   const handleSkip = () => {
@@ -217,8 +276,8 @@ export default function CreateEventPage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("userName");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     router.push("/login");
   };
 
@@ -253,7 +312,7 @@ export default function CreateEventPage() {
                   <Eye size={18} className="text-gray-500" />
                   <h2 className="font-semibold text-gray-700">Preview Event</h2>
                 </div>
-                <button type="button" onClick={() => setShowPreview(!showPreview)} className="text-sm text-purple-600 hover:underline">
+                <button type="button" onClick={() => setShowPreview(!showPreview)} className="text-sm text-blue-600 hover:underline">
                   {showPreview ? "Sembunyikan" : "Lihat Preview"}
                 </button>
               </div>
@@ -262,7 +321,7 @@ export default function CreateEventPage() {
                   <div className="bg-white/95 rounded-2xl p-5">
                     <div className="flex justify-between">
                       <div>
-                        <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-600">
+                        <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-600">
                           {selectedType?.icon} {selectedType?.name}
                         </span>
                         <h3 className="text-xl font-bold text-gray-800 mt-2">{formData.name || "Nama Event"}</h3>
@@ -272,7 +331,7 @@ export default function CreateEventPage() {
                           <span>📍 {formData.location || "Belum diisi"}</span>
                         </div>
                       </div>
-                      <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+                      <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center">
                         <span className="text-2xl">{selectedType?.icon}</span>
                       </div>
                     </div>
@@ -297,7 +356,7 @@ export default function CreateEventPage() {
             {/* Informasi Dasar */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <Sparkles size={18} className="text-purple-600" />
+                <Sparkles size={18} className="text-blue-600" />
                 Informasi Dasar
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -307,7 +366,7 @@ export default function CreateEventPage() {
                     value={formData.name}
                     onChange={handleChange}
                     placeholder="Nama Event *"
-                    className={`w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${errors.name ? "border-red-400" : "border-gray-200"}`}
+                    className={`w-full px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${errors.name ? "border-red-400" : "border-gray-200"}`}
                   />
                 </div>
                 <div>
@@ -335,35 +394,88 @@ export default function CreateEventPage() {
             {/* Waktu & Lokasi */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <Clock size={18} className="text-purple-600" />
+                <Clock size={18} className="text-blue-600" />
                 Waktu & Lokasi
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div>
-                  <input type="date" name="date" value={formData.date} onChange={handleChange} min={today}
-                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.date ? "border-red-400" : "border-gray-200"}`} />
+                  <input 
+                    type="date" 
+                    name="date" 
+                    value={formData.date} 
+                    onChange={handleChange} 
+                    min={today}
+                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.date ? "border-red-400" : "border-gray-200"}`} 
+                  />
                   {errors.date && <p className="text-xs text-red-500 mt-1">{errors.date}</p>}
                 </div>
-                <div><input type="time" name="startTime" value={formData.startTime} onChange={handleChange} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl" /></div>
-                <div><input type="time" name="endTime" value={formData.endTime} onChange={handleChange} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl" /></div>
-                <div><input type="text" name="location" value={formData.location} onChange={handleChange} placeholder="Lokasi / Link Meeting *" className="md:col-span-2 w-full px-4 py-2.5 border border-gray-200 rounded-xl" /></div>
-                <div><input type="number" name="capacity" value={formData.capacity} onChange={handleChange} min={1} placeholder="Kapasitas" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl" /></div>
+                <div>
+                  <input 
+                    type="time" 
+                    name="startTime" 
+                    value={formData.startTime} 
+                    onChange={handleChange} 
+                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.startTime ? "border-red-400" : "border-gray-200"}`} 
+                  />
+                  {errors.startTime && <p className="text-xs text-red-500 mt-1">{errors.startTime}</p>}
+                </div>
+                <div>
+                  <input 
+                    type="time" 
+                    name="endTime" 
+                    value={formData.endTime} 
+                    onChange={handleChange} 
+                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.endTime ? "border-red-400" : "border-gray-200"}`} 
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <input 
+                    type="text" 
+                    name="location" 
+                    value={formData.location} 
+                    onChange={handleChange} 
+                    placeholder="Lokasi / Link Meeting *" 
+                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.location ? "border-red-400" : "border-gray-200"}`} 
+                  />
+                </div>
+                <div>
+                  <input 
+                    type="number" 
+                    name="capacity" 
+                    value={formData.capacity} 
+                    onChange={handleChange} 
+                    min={1} 
+                    placeholder="Kapasitas" 
+                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.capacity ? "border-red-400" : "border-gray-200"}`} 
+                  />
+                </div>
               </div>
             </div>
 
             {/* Deskripsi */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <Tag size={18} className="text-purple-600" />
+                <Tag size={18} className="text-blue-600" />
                 Deskripsi Event
               </h2>
-              <textarea name="description" value={formData.description} onChange={handleChange} rows={5} placeholder="Deskripsi event..." className="w-full px-4 py-2.5 border border-gray-200 rounded-xl" />
+              <textarea 
+                name="description" 
+                value={formData.description} 
+                onChange={handleChange} 
+                rows={5} 
+                placeholder="Deskripsi event..." 
+                className={`w-full px-4 py-2.5 border rounded-xl ${errors.description ? "border-red-400" : "border-gray-200"}`} 
+              />
             </div>
 
             {/* Tombol Submit */}
             <div className="flex gap-4 pt-4">
               <button type="button" onClick={() => router.back()} className="flex-1 px-6 py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">Batal</button>
-              <button type="submit" disabled={isSubmitting} className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:shadow-lg disabled:opacity-70 flex items-center justify-center gap-2">
+              <button 
+                type="submit" 
+                disabled={isSubmitting} 
+                className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:shadow-lg disabled:opacity-70 flex items-center justify-center gap-2"
+              >
                 {isSubmitting ? <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Menyimpan...</> : <><Save size={18} /> Simpan Event</>}
               </button>
             </div>
@@ -377,7 +489,7 @@ export default function CreateEventPage() {
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white">
               <div className="flex items-center gap-2">
-                <Users size={20} className="text-purple-600" />
+                <Users size={20} className="text-blue-600" />
                 <h2 className="text-lg font-semibold text-gray-800">Tambah Tamu ke Event</h2>
               </div>
               <button onClick={handleSkip} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -393,10 +505,10 @@ export default function CreateEventPage() {
 
               {/* Tab Manual vs Excel */}
               <div className="flex gap-2 mb-5 border-b">
-                <button onClick={() => setActiveTab("excel")} className={`pb-2 px-4 ${activeTab === "excel" ? "border-b-2 border-purple-600 text-purple-600 font-medium" : "text-gray-400"}`}>
+                <button onClick={() => setActiveTab("excel")} className={`pb-2 px-4 ${activeTab === "excel" ? "border-b-2 border-blue-600 text-blue-600 font-medium" : "text-gray-400"}`}>
                   📊 Import Excel (Massal)
                 </button>
-                <button onClick={() => setActiveTab("manual")} className={`pb-2 px-4 ${activeTab === "manual" ? "border-b-2 border-purple-600 text-purple-600 font-medium" : "text-gray-400"}`}>
+                <button onClick={() => setActiveTab("manual")} className={`pb-2 px-4 ${activeTab === "manual" ? "border-b-2 border-blue-600 text-blue-600 font-medium" : "text-gray-400"}`}>
                   ✍️ Manual (1 per 1)
                 </button>
               </div>
@@ -404,19 +516,19 @@ export default function CreateEventPage() {
               {/* TAB EXCEL - MASSAL */}
               {activeTab === "excel" && (
                 <div>
-                  <div className="bg-purple-50 rounded-xl p-4 mb-5">
+                  <div className="bg-blue-50 rounded-xl p-4 mb-5">
                     <div className="flex items-center gap-3">
-                      <FileSpreadsheet size={28} className="text-purple-600" />
+                      <FileSpreadsheet size={28} className="text-blue-600" />
                       <div>
                         <h3 className="font-semibold text-gray-800">Import Tamu Massal via Excel</h3>
                         <p className="text-sm text-gray-500">Upload file Excel dengan ribuan tamu sekaligus</p>
                       </div>
                     </div>
                     <div className="flex gap-3 mt-4">
-                      <button onClick={downloadTemplate} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-purple-300 text-purple-600 hover:bg-purple-100">
+                      <button onClick={downloadTemplate} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-blue-300 text-blue-600 hover:bg-blue-100">
                         <Download size={16} /> Download Template
                       </button>
-                      <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700">
+                      <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">
                         <Upload size={16} /> Upload Excel
                       </button>
                       <input ref={fileInputRef} type="file" accept=".xlsx, .xls" onChange={handleImportExcel} className="hidden" />
@@ -438,14 +550,14 @@ export default function CreateEventPage() {
                             {excelData.slice(0, 10).map((guest, i) => (
                               <tr key={i} className="border-t"><td className="px-3 py-1">{guest.name}</td><td className="px-3 py-1">{guest.email}</td></tr>
                             ))}
-                            {excelData.length > 10 && <tr><td colSpan={2} className="px-3 py-2 text-center text-gray-400">+{excelData.length - 10} tamu lainnya</td></tr>}
+                            {excelData.length > 10 && <tr><td colSpan={2} className="px-3 py-2 text-center text-gray-400">+{excelData.length - 10} tamu lainnya</td><td className="px-3 py-2"></td></tr>}
                           </tbody>
                         </table>
                       </div>
                     </div>
                   )}
 
-                  <button onClick={generateAllQR} disabled={excelData.length === 0 || isGenerating} className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+                  <button onClick={generateAllQR} disabled={excelData.length === 0 || isGenerating} className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2">
                     {isGenerating ? <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Membuat QR untuk {excelData.length} tamu...</> : <><QrCode size={18} /> Generate QR Code Massal</>}
                   </button>
                 </div>
@@ -480,7 +592,7 @@ export default function CreateEventPage() {
             <div className="p-5">
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-5 text-center">
                 <p className="text-green-700">✅ {generatedGuests.length} QR Code berhasil dibuat</p>
-                <p className="text-sm text-gray-500 mt-1">QR Code akan dikirim ke email masing-masing tamu</p>
+                <p className="text-sm text-gray-500 mt-1">Data tamu telah tersimpan di database</p>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -495,7 +607,7 @@ export default function CreateEventPage() {
 
               <div className="mt-6 p-4 bg-gray-50 rounded-xl flex gap-3">
                 <button onClick={() => window.print()} className="flex-1 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100">🖨️ Print Semua</button>
-                <button onClick={handleSkip} className="flex-1 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium">Selesai</button>
+                <button onClick={handleSkip} className="flex-1 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-medium">Selesai</button>
               </div>
             </div>
           </div>

@@ -1,16 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   MessageSquare,
   Star,
-  ThumbsUp,
-  ThumbsDown,
   Calendar,
   User,
   Mail,
-  Filter,
   Search,
   Download,
   Trash2,
@@ -24,6 +21,7 @@ import {
 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
+import api from "@/lib/api";
 
 // Tipe data feedback
 interface Feedback {
@@ -38,107 +36,109 @@ interface Feedback {
   status: "read" | "unread";
 }
 
-// Data feedback sementara
-const feedbacksData: Feedback[] = [
-  {
-    id: 1,
-    guestName: "Budi Santoso",
-    guestEmail: "budi@email.com",
-    eventId: 1,
-    eventName: "Seminar Digital Marketing",
-    rating: 5,
-    comment: "Acaranya sangat menarik dan informatif! Pembicaranya expert di bidangnya. Sangat merekomendasikan!",
-    createdAt: "2026-06-15 14:30",
-    status: "read",
-  },
-  {
-    id: 2,
-    guestName: "Siti Aminah",
-    guestEmail: "siti@email.com",
-    eventId: 1,
-    eventName: "Seminar Digital Marketing",
-    rating: 4,
-    comment: "Materinya bagus, tapi sayang sound system kurang jelas di belakang.",
-    createdAt: "2026-06-15 15:45",
-    status: "unread",
-  },
-  {
-    id: 3,
-    guestName: "Agus Wijaya",
-    guestEmail: "agus@email.com",
-    eventId: 2,
-    eventName: "Workshop Next.js",
-    rating: 5,
-    comment: "Workshopnya mantap! Langsung praktek dan dapet ilmu baru tentang Next.js 15.",
-    createdAt: "2026-06-20 16:20",
-    status: "unread",
-  },
-  {
-    id: 4,
-    guestName: "Dewi Sartika",
-    guestEmail: "dewi@email.com",
-    eventId: 2,
-    eventName: "Workshop Next.js",
-    rating: 3,
-    comment: "Materinya terlalu cepat, susah diikuti untuk pemula.",
-    createdAt: "2026-06-20 17:00",
-    status: "read",
-  },
-  {
-    id: 5,
-    guestName: "Eko Prasetyo",
-    guestEmail: "eko@email.com",
-    eventId: 3,
-    eventName: "Grand Launching QRevnt",
-    rating: 5,
-    comment: "Platformnya keren! Sukses selalu untuk QRevnt!",
-    createdAt: "2026-06-25 12:15",
-    status: "unread",
-  },
-];
-
-// Data event untuk filter
-const events = [
-  { id: 1, name: "Seminar Digital Marketing" },
-  { id: 2, name: "Workshop Next.js" },
-  { id: 3, name: "Grand Launching QRevnt" },
-];
+interface Event {
+  id: number;
+  name: string;
+}
 
 export default function FeedbackPage() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [userName, setUserName] = useState("EO");
+  const [userName, setUserName] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEvent, setSelectedEvent] = useState<number | "all">("all");
   const [selectedRating, setSelectedRating] = useState<number | "all">("all");
   const [selectedStatus, setSelectedStatus] = useState<"all" | "read" | "unread">("all");
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>(feedbacksData);
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Ambil user login
+  useEffect(() => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      const userData = JSON.parse(user);
+      setUserName(userData.name || userData.username || "EO");
+    } else {
+      router.push("/login");
+    }
+  }, [router]);
+
+  // Ambil data feedback dari API
+  const fetchFeedbacks = async () => {
+    setIsLoading(true);
+    try {
+      const response = await api.get("/feedbacks");
+      setFeedbacks(response.data);
+    } catch (error: any) {
+      console.error("Error fetching feedbacks:", error);
+      if (error.response?.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        router.push("/login");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Ambil daftar event
+  const fetchEvents = async () => {
+    try {
+      const response = await api.get("/events");
+      setEvents(response.data);
+    } catch (error) {
+      console.error("Error fetching events:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchFeedbacks();
+    fetchEvents();
+  }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("userName");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     router.push("/login");
   };
 
   // Tandai sebagai sudah dibaca
-  const markAsRead = (id: number) => {
-    setFeedbacks(feedbacks.map((fb) =>
-      fb.id === id ? { ...fb, status: "read" } : fb
-    ));
+  const markAsRead = async (id: number) => {
+    try {
+      await api.patch(`/feedbacks/${id}/read`);
+      setFeedbacks(feedbacks.map((fb) =>
+        fb.id === id ? { ...fb, status: "read" } : fb
+      ));
+    } catch (error) {
+      console.error("Error marking as read:", error);
+    }
   };
 
   // Hapus feedback
-  const deleteFeedback = (id: number) => {
-    if (confirm("Yakin ingin menghapus feedback ini?")) {
+  const deleteFeedback = async (id: number) => {
+    if (!confirm("Yakin ingin menghapus feedback ini?")) return;
+    
+    try {
+      await api.delete(`/feedbacks/${id}`);
       setFeedbacks(feedbacks.filter((fb) => fb.id !== id));
+      if (selectedFeedback?.id === id) setShowDetailModal(false);
+    } catch (error) {
+      console.error("Error deleting feedback:", error);
+      alert("Gagal menghapus feedback!");
     }
   };
 
   // Export ke CSV
   const exportToCSV = () => {
     const filtered = getFilteredFeedbacks();
+    if (filtered.length === 0) {
+      alert("Tidak ada data untuk diexport!");
+      return;
+    }
+
     const csvData = filtered.map((fb) => ({
       "Nama": fb.guestName,
       "Email": fb.guestEmail,
@@ -149,7 +149,7 @@ export default function FeedbackPage() {
       "Status": fb.status === "read" ? "Sudah Dibaca" : "Belum Dibaca",
     }));
     
-    const headers = Object.keys(csvData[0] || {});
+    const headers = Object.keys(csvData[0]);
     const csvRows = [
       headers.join(","),
       ...csvData.map(row => headers.map(h => `"${row[h as keyof typeof row]}"`).join(",")),
@@ -182,7 +182,9 @@ export default function FeedbackPage() {
   const stats = {
     total: feedbacks.length,
     unread: feedbacks.filter((fb) => fb.status === "unread").length,
-    averageRating: (feedbacks.reduce((sum, fb) => sum + fb.rating, 0) / feedbacks.length).toFixed(1),
+    averageRating: feedbacks.length > 0 
+      ? (feedbacks.reduce((sum, fb) => sum + fb.rating, 0) / feedbacks.length).toFixed(1)
+      : "0",
     fiveStar: feedbacks.filter((fb) => fb.rating === 5).length,
   };
 
@@ -205,6 +207,20 @@ export default function FeedbackPage() {
     if (rating === 3) return <Meh size={20} className="text-yellow-500" />;
     return <Frown size={20} className="text-red-500" />;
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex">
+        <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} onLogout={handleLogout} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Loading feedback...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
@@ -299,94 +315,94 @@ export default function FeedbackPage() {
           </div>
 
           {/* Daftar Feedback */}
-          <div className="space-y-4">
-            {filteredFeedbacks.map((feedback) => (
-              <div
-                key={feedback.id}
-                className={`bg-white rounded-2xl shadow-sm border transition-all duration-300 hover:shadow-md ${
-                  feedback.status === "unread" ? "border-l-4 border-l-yellow-500" : "border-gray-100"
-                }`}
-              >
-                <div className="p-5">
-                  <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 flex-wrap mb-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center">
-                            <User size={14} className="text-white" />
+          {filteredFeedbacks.length > 0 ? (
+            <div className="space-y-4">
+              {filteredFeedbacks.map((feedback) => (
+                <div
+                  key={feedback.id}
+                  className={`bg-white rounded-2xl shadow-sm border transition-all duration-300 hover:shadow-md ${
+                    feedback.status === "unread" ? "border-l-4 border-l-yellow-500" : "border-gray-100"
+                  }`}
+                >
+                  <div className="p-5">
+                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 flex-wrap mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center">
+                              <User size={14} className="text-white" />
+                            </div>
+                            <span className="font-medium text-gray-800">{feedback.guestName}</span>
                           </div>
-                          <span className="font-medium text-gray-800">{feedback.guestName}</span>
+                          <div className="flex items-center gap-1 text-gray-400 text-xs">
+                            <Mail size={12} />
+                            <span>{feedback.guestEmail}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-gray-400 text-xs">
+                            <Calendar size={12} />
+                            <span>{feedback.createdAt}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1 text-gray-400 text-xs">
-                          <Mail size={12} />
-                          <span>{feedback.guestEmail}</span>
+                        
+                        <div className="flex items-center gap-3 mb-3">
+                          {renderStars(feedback.rating)}
+                          {getRatingIcon(feedback.rating)}
+                          <span className="text-xs text-gray-400">{feedback.eventName}</span>
+                          {feedback.status === "unread" && (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-700 flex items-center gap-1">
+                              <Clock size={10} />
+                              Belum Dibaca
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1 text-gray-400 text-xs">
-                          <Calendar size={12} />
-                          <span>{feedback.createdAt}</span>
-                        </div>
+                        
+                        <p className="text-gray-600 text-sm leading-relaxed line-clamp-2">
+                          "{feedback.comment}"
+                        </p>
                       </div>
                       
-                      <div className="flex items-center gap-3 mb-3">
-                        {renderStars(feedback.rating)}
-                        {getRatingIcon(feedback.rating)}
-                        <span className="text-xs text-gray-400">{feedback.eventName}</span>
-                        {feedback.status === "unread" && (
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-700 flex items-center gap-1">
-                            <Clock size={10} />
-                            Belum Dibaca
-                          </span>
-                        )}
-                      </div>
-                      
-                      <p className="text-gray-600 text-sm leading-relaxed line-clamp-2">
-                        "{feedback.comment}"
-                      </p>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setSelectedFeedback(feedback);
-                          setShowDetailModal(true);
-                        }}
-                        className="p-2 text-gray-400 hover:text-blue-600 transition"
-                        title="Lihat Detail"
-                      >
-                        <Eye size={18} />
-                      </button>
-                      {feedback.status === "unread" && (
+                      <div className="flex items-center gap-2">
                         <button
-                          onClick={() => markAsRead(feedback.id)}
-                          className="p-2 text-gray-400 hover:text-green-600 transition"
-                          title="Tandai Sudah Dibaca"
+                          onClick={() => {
+                            setSelectedFeedback(feedback);
+                            setShowDetailModal(true);
+                          }}
+                          className="p-2 text-gray-400 hover:text-blue-600 transition"
+                          title="Lihat Detail"
                         >
-                          <CheckCircle size={18} />
+                          <Eye size={18} />
                         </button>
-                      )}
-                      <button
-                        onClick={() => deleteFeedback(feedback.id)}
-                        className="p-2 text-gray-400 hover:text-red-600 transition"
-                        title="Hapus"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                        {feedback.status === "unread" && (
+                          <button
+                            onClick={() => markAsRead(feedback.id)}
+                            className="p-2 text-gray-400 hover:text-green-600 transition"
+                            title="Tandai Sudah Dibaca"
+                          >
+                            <CheckCircle size={18} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => deleteFeedback(feedback.id)}
+                          className="p-2 text-gray-400 hover:text-red-600 transition"
+                          title="Hapus"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
+              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MessageSquare size={32} className="text-gray-400" />
               </div>
-            ))}
-
-            {filteredFeedbacks.length === 0 && (
-              <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
-                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <MessageSquare size={32} className="text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800">Belum ada feedback</h3>
-                <p className="text-gray-400 text-sm mt-1">Feedback dari peserta akan muncul di sini</p>
-              </div>
-            )}
-          </div>
+              <h3 className="text-lg font-semibold text-gray-800">Belum ada feedback</h3>
+              <p className="text-gray-400 text-sm mt-1">Feedback dari peserta akan muncul di sini</p>
+            </div>
+          )}
         </div>
       </div>
 

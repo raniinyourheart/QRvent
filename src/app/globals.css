@@ -5,6 +5,12 @@
   --foreground: #171717;
 }
 
+/* Dark mode class - aktif saat ada class "dark" di html */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -12,20 +18,14 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Animasi float untuk glow - PUNYA ADEK */
+/* Animasi float untuk glow */
 @keyframes floatGlow {
   0% {
     transform: translateY(0px);
@@ -42,7 +42,7 @@ body {
   animation: floatGlow 4s ease-in-out infinite;
 }
 
-/* ✨ ANIMASI BORDER BERPUTAR - YANG ADEK MINTA ✨ */
+/* Animasi border berputar */
 @keyframes borderSpin {
   0% {
     transform: rotate(0deg);
@@ -56,12 +56,12 @@ body {
   animation: borderSpin 4s linear infinite;
 }
 
-/* Animasi spin lebih cepat (opsional) */
+/* Animasi spin lebih cepat */
 .animate-border-spin-fast {
   animation: borderSpin 2s linear infinite;
 }
 
-/* Animasi spin lambat (opsional) */
+/* Animasi spin lambat */
 .animate-border-spin-slow {
   animation: borderSpin 6s linear infinite;
 }
@@ -83,4 +83,46 @@ body {
   background: linear-gradient(90deg, #9333ea, #3b82f6, #a855f7, #9333ea);
   background-size: 300% 100%;
   animation: borderShimmer 3s ease infinite;
+}
+
+/* Scrollbar custom untuk dark mode */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #1f1f1f;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Selection color */
+::selection {
+  background: #3b82f6;
+  color: white;
+}
+
+.dark ::selection {
+  background: #60a5fa;
+  color: #0a0a0a;
 }

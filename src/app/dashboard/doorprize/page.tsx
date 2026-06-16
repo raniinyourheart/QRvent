@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -12,17 +12,15 @@ import {
   Sparkles,
   RefreshCw,
   CheckCircle,
-  Clock,
-  ChevronRight,
   Ticket,
   Award,
   PartyPopper,
-  Zap,
 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
+import api from "@/lib/api";
 
-// Tipe data hadiah
+// Tipe data
 interface Prize {
   id: number;
   name: string;
@@ -30,7 +28,6 @@ interface Prize {
   winners: Winner[];
 }
 
-// Tipe data pemenang
 interface Winner {
   id: number;
   guestId: number;
@@ -41,38 +38,104 @@ interface Winner {
   drawnAt: string;
 }
 
-// Data tamu yang sudah check-in (sementara)
-const checkedInGuests = [
-  { id: 1, name: "Budi Santoso", email: "budi@email.com", checkedInAt: "09:15" },
-  { id: 2, name: "Dewi Sartika", email: "dewi@email.com", checkedInAt: "09:30" },
-  { id: 3, name: "Cahya Wijaya", email: "cahya@email.com", checkedInAt: "09:45" },
-  { id: 4, name: "Anisa Rahma", email: "anisa@email.com", checkedInAt: "10:00" },
-  { id: 5, name: "Rizki Fauzan", email: "rizki@email.com", checkedInAt: "10:15" },
-  { id: 6, name: "Sinta Melati", email: "sinta@email.com", checkedInAt: "10:30" },
-  { id: 7, name: "Bagas Putra", email: "bagas@email.com", checkedInAt: "10:45" },
-  { id: 8, name: "Maya Sari", email: "maya@email.com", checkedInAt: "11:00" },
-];
+interface Guest {
+  id: number;
+  name: string;
+  email: string;
+  status: string;
+  checkedInAt?: string;
+}
+
+interface Event {
+  id: number;
+  name: string;
+  date: string;
+}
 
 export default function DoorprizePage() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [userName, setUserName] = useState("EO");
-  const [selectedEvent, setSelectedEvent] = useState(1);
-  const [prizes, setPrizes] = useState<Prize[]>([
-    { id: 1, name: "Voucher Belanja Rp100.000", quantity: 3, winners: [] },
-    { id: 2, name: "Power Bank 10.000mAh", quantity: 2, winners: [] },
-    { id: 3, name: "Earbuds Bluetooth", quantity: 1, winners: [] },
-    { id: 4, name: "Tiket Nonton Film", quantity: 5, winners: [] },
-  ]);
+  const [userName, setUserName] = useState("");
+  const [events, setEvents] = useState<Event[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
+  const [checkedInGuests, setCheckedInGuests] = useState<Guest[]>([]);
+  const [prizes, setPrizes] = useState<Prize[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawnWinner, setDrawnWinner] = useState<Winner | null>(null);
   const [showWinnerModal, setShowWinnerModal] = useState(false);
   const [newPrizeName, setNewPrizeName] = useState("");
   const [newPrizeQuantity, setNewPrizeQuantity] = useState(1);
 
+  // Ambil user login
+  useEffect(() => {
+    const user = localStorage.getItem("user");
+    if (user) {
+      const userData = JSON.parse(user);
+      setUserName(userData.name || userData.username || "EO");
+    } else {
+      router.push("/login");
+    }
+  }, [router]);
+
+  // Ambil daftar event
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const response = await api.get("/events");
+        setEvents(response.data);
+        if (response.data.length > 0) {
+          setSelectedEvent(response.data[0].id);
+        }
+      } catch (error) {
+        console.error("Error fetching events:", error);
+      }
+    };
+    fetchEvents();
+  }, []);
+
+  // Ambil daftar tamu yang sudah check-in untuk event terpilih
+  const fetchCheckedInGuests = async (eventId: number) => {
+    try {
+      const response = await api.get(`/guests/${eventId}`);
+      const allGuests = response.data;
+      const checkedIn = allGuests.filter((guest: Guest) => guest.status === "checked_in");
+      setCheckedInGuests(checkedIn);
+    } catch (error) {
+      console.error("Error fetching guests:", error);
+      setCheckedInGuests([]);
+    }
+  };
+
+  // Load doorprize dari localStorage (sementara, nanti pindah ke database)
+  const loadPrizes = (eventId: number) => {
+    const storedPrizes = localStorage.getItem(`doorprize_${eventId}`);
+    if (storedPrizes) {
+      setPrizes(JSON.parse(storedPrizes));
+    } else {
+      setPrizes([]);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedEvent) {
+      fetchCheckedInGuests(selectedEvent);
+      loadPrizes(selectedEvent);
+      setIsLoading(false);
+    }
+  }, [selectedEvent]);
+
+  // Simpan prize ke localStorage
+  const savePrizes = (newPrizes: Prize[]) => {
+    if (selectedEvent) {
+      localStorage.setItem(`doorprize_${selectedEvent}`, JSON.stringify(newPrizes));
+      setPrizes(newPrizes);
+    }
+  };
+
   const handleLogout = () => {
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("userName");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     router.push("/login");
   };
 
@@ -83,7 +146,7 @@ export default function DoorprizePage() {
   };
 
   // Lakukan undian
-  const drawWinner = (prize: Prize) => {
+  const drawWinner = async (prize: Prize) => {
     const availableGuests = getAvailableGuests();
     
     if (availableGuests.length === 0) {
@@ -98,7 +161,6 @@ export default function DoorprizePage() {
     
     setIsDrawing(true);
     
-    // Animasi delay biar dramatis
     setTimeout(() => {
       const randomIndex = Math.floor(Math.random() * availableGuests.length);
       const winner = availableGuests[randomIndex];
@@ -113,12 +175,13 @@ export default function DoorprizePage() {
         drawnAt: new Date().toLocaleTimeString(),
       };
       
-      setPrizes(prizes.map((p) =>
+      const updatedPrizes = prizes.map((p) =>
         p.id === prize.id
           ? { ...p, winners: [...p.winners, newWinner] }
           : p
-      ));
+      );
       
+      savePrizes(updatedPrizes);
       setDrawnWinner(newWinner);
       setShowWinnerModal(true);
       setIsDrawing(false);
@@ -128,7 +191,8 @@ export default function DoorprizePage() {
   // Reset semua pemenang
   const resetAllWinners = () => {
     if (confirm("Yakin ingin mereset semua pemenang? Undian harus diulang dari awal.")) {
-      setPrizes(prizes.map((p) => ({ ...p, winners: [] })));
+      const resetPrizes = prizes.map((p) => ({ ...p, winners: [] }));
+      savePrizes(resetPrizes);
     }
   };
 
@@ -139,15 +203,14 @@ export default function DoorprizePage() {
       return;
     }
     
-    setPrizes([
-      ...prizes,
-      {
-        id: Date.now(),
-        name: newPrizeName,
-        quantity: newPrizeQuantity,
-        winners: [],
-      },
-    ]);
+    const newPrize: Prize = {
+      id: Date.now(),
+      name: newPrizeName,
+      quantity: newPrizeQuantity,
+      winners: [],
+    };
+    
+    savePrizes([...prizes, newPrize]);
     setNewPrizeName("");
     setNewPrizeQuantity(1);
   };
@@ -155,7 +218,7 @@ export default function DoorprizePage() {
   // Hapus hadiah
   const deletePrize = (id: number) => {
     if (confirm("Yakin ingin menghapus hadiah ini?")) {
-      setPrizes(prizes.filter((p) => p.id !== id));
+      savePrizes(prizes.filter((p) => p.id !== id));
     }
   };
 
@@ -163,11 +226,19 @@ export default function DoorprizePage() {
   const totalQuota = prizes.reduce((sum, p) => sum + p.quantity, 0);
   const availableGuestsCount = getAvailableGuests().length;
 
-  // Data event (sementara)
-  const events = [
-    { id: 1, name: "Seminar Digital Marketing", date: "15 Juni 2026" },
-    { id: 2, name: "Workshop Next.js", date: "20 Juni 2026" },
-  ];
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex">
+        <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} onLogout={handleLogout} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Loading doorprize...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
@@ -181,28 +252,30 @@ export default function DoorprizePage() {
           {/* Header */}
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-              <Gift className="text-purple-600" size={28} />
+              <Gift className="text-blue-600" size={28} />
               Doorprize & Undian
             </h1>
             <p className="text-gray-400 text-sm">Kelola hadiah dan lakukan undian untuk tamu yang hadir</p>
           </div>
 
           {/* Pilih Event */}
-          <div className="flex gap-4 mb-6 overflow-x-auto pb-2">
-            {events.map((event) => (
-              <button
-                key={event.id}
-                onClick={() => setSelectedEvent(event.id)}
-                className={`px-5 py-2.5 rounded-xl font-medium transition-all duration-200 whitespace-nowrap ${
-                  selectedEvent === event.id
-                    ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md"
-                    : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
-                }`}
-              >
-                {event.name}
-              </button>
-            ))}
-          </div>
+          {events.length > 0 && (
+            <div className="flex gap-4 mb-6 overflow-x-auto pb-2">
+              {events.map((event) => (
+                <button
+                  key={event.id}
+                  onClick={() => setSelectedEvent(event.id)}
+                  className={`px-5 py-2.5 rounded-xl font-medium transition-all duration-200 whitespace-nowrap ${
+                    selectedEvent === event.id
+                      ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md"
+                      : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  {event.name}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Stat Ringkasan */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -212,8 +285,8 @@ export default function DoorprizePage() {
                   <p className="text-gray-400 text-sm">Total Hadiah</p>
                   <p className="text-2xl font-bold text-gray-800">{prizes.length}</p>
                 </div>
-                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <Gift size={20} className="text-purple-600" />
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <Gift size={20} className="text-blue-600" />
                 </div>
               </div>
             </div>
@@ -257,7 +330,7 @@ export default function DoorprizePage() {
           {/* Form Tambah Hadiah */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-8">
             <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Plus size={18} className="text-purple-600" />
+              <Plus size={18} className="text-blue-600" />
               Tambah Hadiah Baru
             </h3>
             <div className="flex flex-col sm:flex-row gap-4">
@@ -266,7 +339,7 @@ export default function DoorprizePage() {
                 placeholder="Nama hadiah (contoh: Voucher Rp50.000)"
                 value={newPrizeName}
                 onChange={(e) => setNewPrizeName(e.target.value)}
-                className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+                className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
               <div className="flex items-center gap-2">
                 <span className="text-gray-500 text-sm">Jumlah:</span>
@@ -276,11 +349,11 @@ export default function DoorprizePage() {
                   max="100"
                   value={newPrizeQuantity}
                   onChange={(e) => setNewPrizeQuantity(parseInt(e.target.value) || 1)}
-                  className="w-20 px-3 py-2 border border-gray-200 rounded-xl text-center focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                  className="w-20 px-3 py-2 border border-gray-200 rounded-xl text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
                 <button
                   onClick={addPrize}
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:shadow-lg transition-all duration-300"
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:shadow-lg transition-all duration-300"
                 >
                   Tambah
                 </button>
@@ -289,110 +362,108 @@ export default function DoorprizePage() {
           </div>
 
           {/* Daftar Hadiah & Undian */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {prizes.map((prize) => {
-              const remaining = prize.quantity - prize.winners.length;
-              const isComplete = prize.winners.length >= prize.quantity;
-              
-              return (
-                <div
-                  key={prize.id}
-                  className={`bg-white rounded-2xl shadow-sm border transition-all duration-300 overflow-hidden ${
-                    isComplete ? "border-green-200 bg-green-50/30" : "border-gray-100"
-                  }`}
-                >
-                  {/* Header Hadiah */}
-                  <div className="p-5 border-b border-gray-100">
-                    <div className="flex justify-between items-start">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                          <Ticket size={18} className="text-white" />
+          {prizes.length > 0 ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {prizes.map((prize) => {
+                const isComplete = prize.winners.length >= prize.quantity;
+                
+                return (
+                  <div
+                    key={prize.id}
+                    className={`bg-white rounded-2xl shadow-sm border transition-all duration-300 overflow-hidden ${
+                      isComplete ? "border-green-200 bg-green-50/30" : "border-gray-100"
+                    }`}
+                  >
+                    {/* Header Hadiah */}
+                    <div className="p-5 border-b border-gray-100">
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center">
+                            <Ticket size={18} className="text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-800">{prize.name}</h3>
+                            <p className="text-sm text-gray-500">
+                              Kuota: {prize.winners.length} / {prize.quantity}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-800">{prize.name}</h3>
-                          <p className="text-sm text-gray-500">
-                            Kuota: {prize.winners.length} / {prize.quantity}
+                        <button
+                          onClick={() => deletePrize(prize.id)}
+                          className="text-gray-400 hover:text-red-500 transition"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="px-5 pt-4">
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full transition-all duration-500"
+                          style={{ width: `${(prize.winners.length / prize.quantity) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Tombol Undi & Daftar Pemenang */}
+                    <div className="p-5">
+                      {!isComplete ? (
+                        <button
+                          onClick={() => drawWinner(prize)}
+                          disabled={isDrawing || availableGuestsCount === 0}
+                          className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-medium hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          {isDrawing ? (
+                            <>
+                              <RefreshCw size={18} className="animate-spin" />
+                              Mengundi...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={18} />
+                              Undi {prize.name}
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <div className="text-center py-2 text-green-600 flex items-center justify-center gap-2">
+                          <CheckCircle size={18} />
+                          Kuota terpenuhi!
+                        </div>
+                      )}
+
+                      {/* Daftar Pemenang */}
+                      {prize.winners.length > 0 && (
+                        <div className="mt-4">
+                          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
+                            🎉 Pemenang 🎉
                           </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => deletePrize(prize.id)}
-                        className="text-gray-400 hover:text-red-500 transition"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="px-5 pt-4">
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
-                        style={{ width: `${(prize.winners.length / prize.quantity) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Tombol Undi & Daftar Pemenang */}
-                  <div className="p-5">
-                    {!isComplete ? (
-                      <button
-                        onClick={() => drawWinner(prize)}
-                        disabled={isDrawing || availableGuestsCount === 0}
-                        className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {isDrawing ? (
-                          <>
-                            <RefreshCw size={18} className="animate-spin" />
-                            Mengundi...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles size={18} />
-                            Undi {prize.name}
-                          </>
-                        )}
-                      </button>
-                    ) : (
-                      <div className="text-center py-2 text-green-600 flex items-center justify-center gap-2">
-                        <CheckCircle size={18} />
-                        Kuota terpenuhi!
-                      </div>
-                    )}
-
-                    {/* Daftar Pemenang */}
-                    {prize.winners.length > 0 && (
-                      <div className="mt-4">
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
-                          🎉 Pemenang 🎉
-                        </p>
-                        <div className="space-y-2">
-                          {prize.winners.map((winner) => (
-                            <div
-                              key={winner.id}
-                              className="flex items-center justify-between p-2 bg-purple-50 rounded-lg"
-                            >
-                              <div>
-                                <p className="font-medium text-gray-800 text-sm">{winner.guestName}</p>
-                                <p className="text-xs text-gray-500">{winner.guestEmail}</p>
+                          <div className="space-y-2">
+                            {prize.winners.map((winner) => (
+                              <div
+                                key={winner.id}
+                                className="flex items-center justify-between p-2 bg-blue-50 rounded-lg"
+                              >
+                                <div>
+                                  <p className="font-medium text-gray-800 text-sm">{winner.guestName}</p>
+                                  <p className="text-xs text-gray-500">{winner.guestEmail}</p>
+                                </div>
+                                <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                                  {winner.drawnAt}
+                                </span>
                               </div>
-                              <span className="text-xs text-purple-600 bg-purple-100 px-2 py-1 rounded-full">
-                                {winner.drawnAt}
-                              </span>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Jika belum ada hadiah */}
-          {prizes.length === 0 && (
+                );
+              })}
+            </div>
+          ) : (
             <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
               <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Gift size={32} className="text-gray-400" />
@@ -405,9 +476,9 @@ export default function DoorprizePage() {
           {/* Daftar Semua Pemenang */}
           {totalWinners > 0 && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6">
-              <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-pink-50">
+              <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-cyan-50">
                 <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                  <Award size={18} className="text-purple-600" />
+                  <Award size={18} className="text-blue-600" />
                   Semua Pemenang ({totalWinners})
                 </h3>
               </div>
@@ -428,7 +499,7 @@ export default function DoorprizePage() {
                           <td className="px-6 py-3 text-gray-800 font-medium">{winner.guestName}</td>
                           <td className="px-6 py-3 text-gray-500 text-sm">{winner.guestEmail}</td>
                           <td className="px-6 py-3">
-                            <span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-700">
+                            <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
                               {winner.prizeName}
                             </span>
                           </td>
@@ -453,13 +524,13 @@ export default function DoorprizePage() {
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">🎉 SELAMAT! 🎉</h2>
             <p className="text-gray-600 mb-4">{drawnWinner.guestName}</p>
-            <div className="bg-purple-100 rounded-xl p-4 mb-4">
+            <div className="bg-blue-100 rounded-xl p-4 mb-4">
               <p className="text-sm text-gray-500">Mendapatkan</p>
-              <p className="text-xl font-bold text-purple-600">{drawnWinner.prizeName}</p>
+              <p className="text-xl font-bold text-blue-600">{drawnWinner.prizeName}</p>
             </div>
             <button
               onClick={() => setShowWinnerModal(false)}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium hover:shadow-lg transition"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-medium hover:shadow-lg transition"
             >
               Lanjutkan
             </button>

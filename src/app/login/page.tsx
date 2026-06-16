@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { User, Mail, Lock, Home, Eye, EyeOff } from "lucide-react";
+import { authAPI } from "@/lib/api";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -12,13 +13,17 @@ export default function AuthPage() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  // Login form state
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  
+  // Sign Up form state
   const [signupUsername, setSignupUsername] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Handle Login dengan API
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     
@@ -29,19 +34,30 @@ export default function AuthPage() {
     
     setIsLoading(true);
     
-    setTimeout(() => {
-      if (loginUsername === "eo" && loginPassword === "qrevnt123") {
-        localStorage.setItem("isLoggedIn", "true");
-        localStorage.setItem("userName", loginUsername);
-        router.push("/dashboard");
-      } else {
-        setError("Username atau password salah! Coba: eo / qrevnt123");
-        setIsLoading(false);
-      }
-    }, 800);
+    try {
+      const response = await authAPI.login({
+        username: loginUsername,
+        password: loginPassword,
+      });
+      
+      const { token, user } = response.data;
+      
+      // Simpan token dan data user
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("isLoggedIn", "true");
+      localStorage.setItem("userName", user.name || user.username);
+      
+      router.push("/dashboard");
+    } catch (err: any) {
+      console.error("Login error:", err);
+      setError(err.response?.data?.message || "Login gagal! Periksa username dan password.");
+      setIsLoading(false);
+    }
   };
 
-  const handleSignUp = (e: React.FormEvent) => {
+  // Handle Sign Up dengan API
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     
@@ -60,12 +76,35 @@ export default function AuthPage() {
     
     setIsLoading(true);
     
-    setTimeout(() => {
+    try {
+      // Register user
+      await authAPI.register({
+        username: signupUsername,
+        email: signupEmail,
+        password: signupPassword,
+        name: signupUsername,
+      });
+      
+      // Auto login setelah register
+      const loginResponse = await authAPI.login({
+        username: signupUsername,
+        password: signupPassword,
+      });
+      
+      const { token, user } = loginResponse.data;
+      
+      // Simpan token dan data user
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
       localStorage.setItem("isLoggedIn", "true");
-      localStorage.setItem("userName", signupUsername);
-      localStorage.setItem("userEmail", signupEmail);
+      localStorage.setItem("userName", user.name || user.username);
+      
       router.push("/dashboard");
-    }, 800);
+    } catch (err: any) {
+      console.error("Signup error:", err);
+      setError(err.response?.data?.message || "Registrasi gagal! Mungkin username atau email sudah terdaftar.");
+      setIsLoading(false);
+    }
   };
 
   const switchMode = () => {
@@ -82,6 +121,7 @@ export default function AuthPage() {
   return (
     <main className="min-h-screen bg-black flex items-center justify-center p-5 relative overflow-hidden">
       
+      {/* Background Glow */}
       <div className="absolute inset-0 opacity-40">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-blue-600 rounded-full blur-[150px] animate-pulse" />
         <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-blue-500 rounded-full blur-[120px] animate-pulse" />
@@ -90,6 +130,7 @@ export default function AuthPage() {
 
       <div className="relative w-[1200px] h-[700px] border border-blue-600 overflow-hidden shadow-[0_0_50px_#2563eb] bg-[#05000d] rounded-2xl">
         
+        {/* Panel Biru yang bergerak */}
         <div
           className="absolute inset-0 transition-all duration-[1500ms] ease-[cubic-bezier(0.25,0.46,0.45,0.94)]"
           style={{
@@ -113,7 +154,7 @@ export default function AuthPage() {
           `}
         >
           <div className="ml-20 w-[420px]">
-            {/* Header dengan Kembali ke Beranda - HANYA DI LOGIN */}
+            {/* Header dengan Kembali ke Beranda */}
             <div className="flex justify-start items-center mb-20">
               <Link 
                 href="/" 
@@ -131,37 +172,38 @@ export default function AuthPage() {
             <div className="space-y-10">
               {/* Username */}
               <div className="relative group">
-                <User size={18} className="absolute left-0 top-1 text-white group-hover:text-blue-400 transition-all duration-300" />
+                <User size={18} className="absolute left-0 top-1/2 -translate-y-1/2 text-white group-hover:text-blue-400 transition-all duration-300" />
                 <input
                   type="text"
                   value={loginUsername}
                   onChange={(e) => setLoginUsername(e.target.value)}
                   placeholder="Username"
-                  className="w-full bg-transparent outline-none text-white pb-3 border-b border-white/50 focus:border-blue-400 transition-all duration-300 group-hover:border-blue-400 placeholder-white/40 pl-10"
+                  className="w-full bg-transparent outline-none text-white py-3 border-b border-white/50 focus:border-blue-400 transition-all duration-300 group-hover:border-blue-400 placeholder-white/40 pl-10"
                   disabled={isLoading}
                 />
               </div>
 
               {/* Password */}
               <div className="relative group">
-                <Lock size={18} className="absolute left-0 top-1 text-white group-hover:text-blue-400 transition-all duration-300" />
+                <Lock size={18} className="absolute left-0 top-1/2 -translate-y-1/2 text-white group-hover:text-blue-400 transition-all duration-300" />
                 <input
                   type={showPassword ? "text" : "password"}
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
                   placeholder="Password"
-                  className="w-full bg-transparent outline-none text-white pb-3 border-b border-white/50 focus:border-blue-400 transition-all duration-300 group-hover:border-blue-400 placeholder-white/40 pl-10 pr-8"
+                  className="w-full bg-transparent outline-none text-white py-3 border-b border-white/50 focus:border-blue-400 transition-all duration-300 group-hover:border-blue-400 placeholder-white/40 pl-10 pr-10"
                   disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-0 top-1 text-white hover:text-blue-400 transition-all duration-300"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 text-white hover:text-blue-400 transition-all duration-300"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
 
+              {/* Forgot Password */}
               <div className="text-right -mt-4">
                 <Link 
                   href="/forgot-password"
@@ -171,12 +213,14 @@ export default function AuthPage() {
                 </Link>
               </div>
 
+              {/* Error Message */}
               {error && (
                 <div className="text-red-400 text-sm text-center bg-red-500/10 py-2 rounded-lg">
                   {error}
                 </div>
               )}
 
+              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={isLoading}
@@ -192,6 +236,7 @@ export default function AuthPage() {
                 )}
               </button>
 
+              {/* Switch to Sign Up */}
               <div className="text-center">
                 <p className="text-white/80 text-sm">
                   Don&apos;t have an account?{" "}
@@ -208,7 +253,7 @@ export default function AuthPage() {
           </div>
         </form>
 
-        {/* SIGNUP FORM - Tanpa Kembali ke Beranda */}
+        {/* SIGNUP FORM */}
         <form
           onSubmit={handleSignUp}
           className={`
@@ -220,7 +265,7 @@ export default function AuthPage() {
           `}
         >
           <div className="w-[420px] ml-10">
-            {/* Header KOSONG - tidak ada Kembali ke Beranda */}
+            {/* Spacer (tidak ada Kembali ke Beranda di Sign Up) */}
             <div className="h-12 mb-8"></div>
             
             <h1 className="text-white text-4xl font-bold mb-8 drop-shadow-[0_0_20px_rgba(59,130,246,0.8)] text-center">
@@ -228,8 +273,9 @@ export default function AuthPage() {
             </h1>
 
             <div className="space-y-6">
+              {/* Username */}
               <div className="relative group">
-                <User size={18} className="absolute left-0 top-1 text-white group-hover:text-blue-400 transition-all duration-300" />
+                <User size={18} className="absolute left-0 top-1/2 -translate-y-1/2 text-white group-hover:text-blue-400 transition-all duration-300" />
                 <input
                   type="text"
                   value={signupUsername}
@@ -240,8 +286,9 @@ export default function AuthPage() {
                 />
               </div>
 
+              {/* Email */}
               <div className="relative group">
-                <Mail size={18} className="absolute left-0 top-1 text-white group-hover:text-blue-400 transition-all duration-300" />
+                <Mail size={18} className="absolute left-0 top-1/2 -translate-y-1/2 text-white group-hover:text-blue-400 transition-all duration-300" />
                 <input
                   type="email"
                   value={signupEmail}
@@ -252,31 +299,34 @@ export default function AuthPage() {
                 />
               </div>
 
+              {/* Password */}
               <div className="relative group">
-                <Lock size={18} className="absolute left-0 top-1 text-white group-hover:text-blue-400 transition-all duration-300" />
+                <Lock size={18} className="absolute left-0 top-1/2 -translate-y-1/2 text-white group-hover:text-blue-400 transition-all duration-300" />
                 <input
                   type={showPassword ? "text" : "password"}
                   value={signupPassword}
                   onChange={(e) => setSignupPassword(e.target.value)}
                   placeholder="Password"
-                  className="w-full bg-transparent outline-none text-white border-b border-white/50 pb-3 focus:border-blue-400 transition-all duration-300 group-hover:border-blue-400 placeholder-white/40 pl-10 pr-8"
+                  className="w-full bg-transparent outline-none text-white border-b border-white/50 pb-3 focus:border-blue-400 transition-all duration-300 group-hover:border-blue-400 placeholder-white/40 pl-10 pr-10"
                   disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-0 top-1 text-white hover:text-blue-400 transition-all duration-300"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 text-white hover:text-blue-400 transition-all duration-300"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
 
+              {/* Error Message */}
               {error && (
                 <div className="text-red-400 text-sm text-center bg-red-500/10 py-2 rounded-lg">
                   {error}
                 </div>
               )}
 
+              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={isLoading}
@@ -292,6 +342,7 @@ export default function AuthPage() {
                 )}
               </button>
 
+              {/* Divider */}
               <div className="relative flex items-center justify-center my-4">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-white/20"></div>
@@ -299,9 +350,11 @@ export default function AuthPage() {
                 <div className="relative px-4 text-white/50 text-sm bg-transparent">Atau</div>
               </div>
 
+              {/* Google Sign Up */}
               <button
                 type="button"
                 className="w-full h-[50px] rounded-full bg-white/5 border border-white/20 text-white font-medium flex items-center justify-center gap-3 hover:bg-white/10 hover:border-blue-400/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300 group"
+                onClick={() => alert("Fitur Google Login akan segera hadir!")}
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -312,6 +365,7 @@ export default function AuthPage() {
                 <span className="group-hover:text-blue-300 transition">Sign Up with Google</span>
               </button>
 
+              {/* Switch to Login */}
               <div className="text-center mt-4">
                 <p className="text-white/80 text-sm">
                   Already have an account?{" "}

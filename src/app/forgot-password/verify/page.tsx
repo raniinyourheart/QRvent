@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Key, ArrowLeft, AlertCircle } from "lucide-react";
+import api from "@/lib/api";
 
 export default function VerifyOTPPage() {
   const router = useRouter();
@@ -29,7 +30,6 @@ export default function VerifyOTPPage() {
     newOtp[index] = value;
     setOtp(newOtp);
     
-    // Auto focus ke input berikutnya
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -41,7 +41,7 @@ export default function VerifyOTPPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const otpCode = otp.join("");
     
@@ -52,21 +52,34 @@ export default function VerifyOTPPage() {
     
     setIsLoading(true);
     
-    // Simulasi verifikasi OTP (untuk demo, OTP "123456")
-    setTimeout(() => {
-      if (otpCode === "123456") {
+    try {
+      const response = await api.post("/verify-otp", {
+        email: email,
+        otp: otpCode,
+      });
+      
+      if (response.status === 200) {
         router.push("/forgot-password/reset");
-      } else {
-        setError("Invalid code! Please try again.");
-        setIsLoading(false);
       }
-    }, 1000);
+    } catch (err: any) {
+      console.error("Error verifying OTP:", err);
+      setError(err.response?.data?.message || "Invalid code! Please try again.");
+      setIsLoading(false);
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     setError("");
-    // Simulasi kirim ulang OTP
-    alert("A new 6-digit code has been sent to your email!");
+    setIsLoading(true);
+    
+    try {
+      await api.post("/send-otp", { email });
+      alert("A new 6-digit code has been sent to your email!");
+    } catch (err) {
+      setError("Failed to resend code. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -136,7 +149,7 @@ export default function VerifyOTPPage() {
             <p className="text-center text-gray-500 text-sm">
               Didn't receive the code?{' '}
               <button type="button" onClick={handleResend} className="text-blue-400 hover:text-blue-300 transition">
-                Resend
+                Resend Code
               </button>
             </p>
           </form>
