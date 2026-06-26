@@ -11,7 +11,6 @@ import {
   Plus,
   Eye,
   Trash2,
-  Camera,
   Search,
 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
@@ -45,6 +44,39 @@ interface Guest {
   checkedInAt?: string;
   qrCode: string;
 }
+
+// ========== HELPER FUNCTIONS FORMAT TANGGAL ==========
+const formatDate = (dateString: string) => {
+  if (!dateString) return "-";
+  const date = new Date(dateString);
+  return date.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+};
+
+const formatTime = (timeString: string) => {
+  if (!timeString) return "";
+  // Jika formatnya sudah HH:mm:ss, potong detiknya
+  if (timeString.includes(":")) {
+    const parts = timeString.split(":");
+    return `${parts[0]}:${parts[1]}`;
+  }
+  return timeString;
+};
+
+const formatDateTime = (dateTimeString: string) => {
+  if (!dateTimeString) return "-";
+  const date = new Date(dateTimeString);
+  return date.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 export default function EventsPage() {
   const router = useRouter();
@@ -127,7 +159,7 @@ export default function EventsPage() {
       case "upcoming":
         return <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">📅 Akan Datang</span>;
       case "ongoing":
-        return <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">🔴 Berlangsung</span>;
+        return <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">🟢 Berlangsung</span>;
       case "completed":
         return <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700">✅ Selesai</span>;
     }
@@ -270,16 +302,21 @@ export default function EventsPage() {
                       </div>
                     </div>
 
-                    {/* Body Card */}
+                    {/* Body Card - TANGGAL & WAKTU SUDAH DIFORMAT */}
                     <div className="p-5 space-y-3">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                           <Calendar size={16} className="text-blue-600 dark:text-blue-400" />
                         </div>
                         <div>
-                          <p className="text-xs text-gray-400 dark:text-gray-500">Tanggal</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">Tanggal & Waktu</p>
                           <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {event.date} {event.startTime && `• ${event.startTime} - ${event.endTime || "Selesai"}`}
+                            {formatDate(event.date)}
+                            {event.startTime && (
+                              <span className="text-gray-500 dark:text-gray-400 text-xs ml-1">
+                                • {formatTime(event.startTime)} - {formatTime(event.endTime || "Selesai")}
+                              </span>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -314,16 +351,6 @@ export default function EventsPage() {
                         <Eye size={16} />
                         Lihat Tamu
                       </Link>
-                      
-                      {(eventStatus === "upcoming" || eventStatus === "ongoing") && (
-                        <Link
-                          href={`/dashboard/scan/${event.id}`}
-                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all duration-200 text-sm font-medium"
-                        >
-                          <Camera size={16} />
-                          Scan QR
-                        </Link>
-                      )}
                       
                       <button
                         onClick={() => handleDelete(event.id)}

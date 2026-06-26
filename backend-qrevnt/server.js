@@ -149,7 +149,7 @@ app.post('/api/send-otp', async (req, res) => {
   
   try {
     const { data, error } = await resend.emails.send({
-      from: 'Acme <onboarding@resend.dev>', // Resend punya domain gratis ini
+      from: 'Acme <onboarding@resend.dev>',
       to: [email],
       subject: '🔐 Kode Verifikasi QRvent',
       html: `
@@ -232,10 +232,24 @@ app.post('/api/verify-otp', async (req, res) => {
   res.json({ message: 'OTP verified successfully' });
 });
 
-// ========== EVENT ROUTES ==========
+// ========== EVENT ROUTES (DIPERBAIKI - dengan guests) ==========
+
+// Get all events with guests
 app.get('/api/events', async (req, res) => {
   try {
-    const [events] = await promiseDb.query('SELECT * FROM events ORDER BY date DESC');
+    const [events] = await promiseDb.query(
+      'SELECT * FROM events ORDER BY date DESC'
+    );
+    
+    // Ambil guests untuk setiap event
+    for (let event of events) {
+      const [guests] = await promiseDb.query(
+        'SELECT * FROM guests WHERE eventId = ?',
+        [event.id]
+      );
+      event.guests = guests || [];
+    }
+    
     res.json(events);
   } catch (error) {
     console.error(error);
@@ -243,6 +257,7 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
+// Get single event with guests
 app.get('/api/events/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -250,13 +265,22 @@ app.get('/api/events/:id', async (req, res) => {
     if (events.length === 0) {
       return res.status(404).json({ message: 'Event tidak ditemukan' });
     }
-    res.json(events[0]);
+    
+    const event = events[0];
+    const [guests] = await promiseDb.query(
+      'SELECT * FROM guests WHERE eventId = ?',
+      [event.id]
+    );
+    event.guests = guests || [];
+    
+    res.json(event);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Terjadi kesalahan pada server' });
   }
 });
 
+// Create event
 app.post('/api/events', async (req, res) => {
   const {
     name, type, theme, date, startTime, endTime, location,
@@ -302,6 +326,7 @@ app.post('/api/events', async (req, res) => {
   }
 });
 
+// Update event
 app.put('/api/events/:id', async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
@@ -317,6 +342,7 @@ app.put('/api/events/:id', async (req, res) => {
   }
 });
 
+// Delete event
 app.delete('/api/events/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -367,7 +393,14 @@ app.patch('/api/guests/:id/checkin', async (req, res) => {
   const { id } = req.params;
   try {
     const now = new Date();
-    const localDate = now.toISOString().slice(0, 19).replace('T', ' ');
+    const localDate =
+      now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0') + ' ' +
+      String(now.getHours()).padStart(2, '0') + ':' +
+      String(now.getMinutes()).padStart(2, '0') + ':' +
+      String(now.getSeconds()).padStart(2, '0');
+
     const [result] = await promiseDb.query(
       'UPDATE guests SET status = ?, checkedInAt = ? WHERE id = ?',
       ['checked_in', localDate, id]
@@ -550,7 +583,7 @@ app.put('/api/settings', async (req, res) => {
   }
 });
 
-// Start server
+// ========== START SERVER ==========
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📁 API available at http://localhost:${PORT}/api`);

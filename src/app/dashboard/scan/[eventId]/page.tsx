@@ -19,6 +19,28 @@ export default function ScanQRPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const scannerRef = useRef<any>(null);
   const [isScannerReady, setIsScannerReady] = useState(false);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState("");
+
+  useEffect(() => {
+    const loadCameras = async () => {
+      await navigator.mediaDevices.getUserMedia({ video: true });
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+
+      const videoInputs = devices.filter(
+        (device) => device.kind === "videoinput"
+      );
+
+      setCameras(videoInputs);
+
+      if (videoInputs.length > 0) {
+        setSelectedCamera(videoInputs[0].deviceId);
+      }
+    };
+
+    loadCameras();
+  }, []);
 
   // Ambil user login
   useEffect(() => {
@@ -64,16 +86,16 @@ export default function ScanQRPage() {
         scanner.render(
           async (decodedText) => {
             console.log("Scanned:", decodedText);
-            
+
             try {
               const qrData = JSON.parse(decodedText);
               const { id, name, email } = qrData;
-              
+
               // Cari tamu berdasarkan ID atau email
               const guestsResponse = await api.get(`/guests/${eventId}`);
               const guests = guestsResponse.data;
               const guest = guests.find((g: any) => g.id === id || g.email === email);
-              
+
               if (guest && guest.status !== "checked_in") {
                 // Update status tamu via API
                 await api.patch(`/guests/${guest.id}/checkin`);
@@ -86,7 +108,7 @@ export default function ScanQRPage() {
             } catch (error) {
               setScanResult({ success: false, message: "❌ QR Code tidak valid!" });
             }
-            
+
             setTimeout(() => setScanResult(null), 2000);
           },
           (error) => {
@@ -147,18 +169,18 @@ export default function ScanQRPage() {
   return (
     <div className="min-h-screen bg-gray-100 flex">
       <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} onLogout={handleLogout} />
-      
+
       <div className="flex-1 flex flex-col">
         <Navbar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} userName={userName} />
-        
+
         <div className="p-6">
-          <button 
-            onClick={() => router.push("/dashboard/events")} 
+          <button
+            onClick={() => router.push("/dashboard/events")}
             className="flex items-center gap-2 text-gray-600 mb-4 hover:text-blue-600 transition"
           >
             <ArrowLeft size={18} /> Back to Events
           </button>
-          
+
           <div className="bg-white rounded-xl shadow-lg p-6 max-w-4xl mx-auto">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -174,35 +196,51 @@ export default function ScanQRPage() {
                 Fullscreen
               </button>
             </div>
-            
-            <p className="text-gray-500 mb-4">
-              Event: <span className="font-semibold">{event.name}</span>
-            </p>
-            
+
+            <div className="flex justify-between items-center">
+              <p className="text-gray-500">
+                Event: <span className="font-semibold">{event.name}</span>
+              </p>
+
+              <select
+                value={selectedCamera}
+                onChange={(e) => setSelectedCamera(e.target.value)}
+                className="border rounded-lg px-3 py-2 text-sm"
+              >
+                {cameras.map((camera) => (
+                  <option
+                    key={camera.deviceId}
+                    value={camera.deviceId}
+                  >
+                    {camera.label || `Camera ${camera.deviceId.slice(0, 5)}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Scanner area - lebih lebar */}
             <div className="w-full max-w-3xl mx-auto">
               <div id="qr-reader" className="w-full"></div>
             </div>
-            
+
             {!isScannerReady && (
               <div className="text-center py-4">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="text-gray-500 text-sm mt-2">Starting camera...</p>
               </div>
             )}
-            
+
             {scanResult && (
-              <div className={`mt-4 p-3 rounded-lg text-center ${
-                scanResult.success ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-              }`}>
+              <div className={`mt-4 p-3 rounded-lg text-center ${scanResult.success ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                }`}>
                 {scanResult.message}
               </div>
             )}
-            
+
             <p className="text-center text-gray-500 text-sm mt-4">
               Point camera at guest's QR code to check in
             </p>
-            
+
             <div className="mt-4 p-3 bg-blue-50 rounded-lg">
               <p className="text-sm text-blue-700 text-center">
                 💡 Tips: Make sure QR code is clearly visible and well lit

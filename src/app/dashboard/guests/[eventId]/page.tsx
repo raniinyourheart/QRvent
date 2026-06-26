@@ -87,6 +87,18 @@ export default function GuestDetailPage() {
     });
   };
 
+  const formatDateTime = (dateTimeString: string) => {
+    if (!dateTimeString) return "-";
+    const date = new Date(dateTimeString);
+    return date.toLocaleString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   // Ambil user login
   useEffect(() => {
     const user = localStorage.getItem("user");

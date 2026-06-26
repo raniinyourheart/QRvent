@@ -59,6 +59,27 @@ interface DashboardStats {
   attendanceRate: number;
 }
 
+// ========== HELPER FUNCTIONS FORMAT TANGGAL ==========
+const formatDate = (dateString: string) => {
+  if (!dateString) return "-";
+  const date = new Date(dateString);
+  return date.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+};
+
+const formatTime = (timeString: string) => {
+  if (!timeString) return "";
+  // Jika formatnya sudah HH:mm:ss, potong detiknya
+  if (timeString.includes(":")) {
+    const parts = timeString.split(":");
+    return `${parts[0]}:${parts[1]}`;
+  }
+  return timeString;
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -112,7 +133,7 @@ export default function DashboardPage() {
           return;
         }
 
-        // Fetch events
+        // Fetch events dengan guests
         const eventsResponse = await api.get("/events");
         const eventsData = eventsResponse.data || [];
         setEvents(eventsData);
@@ -160,8 +181,12 @@ export default function DashboardPage() {
           setTrendData([{ name: "Belum ada event", target: 0, attended: 0 }]);
         }
 
-        // Recent events (3 terbaru)
-        setRecentEvents(eventsData.slice(0, 3));
+        // Recent events (3 terbaru) - dengan format tanggal
+        const recent = eventsData.slice(0, 3).map((event: Event) => ({
+          ...event,
+          formattedDate: formatDate(event.date),
+        }));
+        setRecentEvents(recent);
 
       } catch (error: any) {
         console.error("Error fetching dashboard data:", error);
@@ -371,7 +396,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Recent Events Table */}
+          {/* Recent Events Table - Tanggal sudah diformat */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="p-6 border-b border-gray-100 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Event Terbaru</h3>
@@ -397,7 +422,14 @@ export default function DashboardPage() {
                       return (
                         <tr key={event.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                           <td className="px-6 py-4 text-gray-800 dark:text-gray-200 font-medium">{event.name}</td>
-                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400 text-sm">{event.date || "-"}</td>
+                          <td className="px-6 py-4 text-gray-500 dark:text-gray-400 text-sm">
+                            {formatDate(event.date)}
+                            {event.startTime && (
+                              <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
+                                • {formatTime(event.startTime)}
+                              </span>
+                            )}
+                          </td>
                           <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{totalGuests}</td>
                           <td className="px-6 py-4">
                             <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
