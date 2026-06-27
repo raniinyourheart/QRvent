@@ -23,7 +23,6 @@ export default function AddGuestPage() {
   const eventId = parseInt(params.eventId as string);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [userName, setUserName] = useState("");
-  const [event, setEvent] = useState<{ id: number; name: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -36,6 +35,15 @@ export default function AddGuestPage() {
     email: "",
     phone: "",
   });
+
+  const [event, setEvent] = useState<{
+    id: number;
+    name: string;
+    description?: string;
+    date?: string;
+    startTime?: string;
+    location?: string;
+  } | null>(null);
 
   useEffect(() => {
     const user = localStorage.getItem("user");
@@ -102,12 +110,14 @@ export default function AddGuestPage() {
     setIsSubmitting(true);
 
     try {
+      const uniqueQrCode = `QR${Date.now()}${Math.floor(Math.random() * 10000)}`;
+
       const response = await api.post("/guests", {
         eventId: eventId,
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
-        qrCode: `QR${Date.now()}${Math.floor(Math.random() * 10000)}`,
+        qrCode: uniqueQrCode,
       });
 
       const guestId = response.data.id;
@@ -120,12 +130,34 @@ export default function AddGuestPage() {
       setGeneratedQR(qrUrl);
       setShowQR(true);
 
+      sendInvitation(guestId, guestName, guestEmail, uniqueQrCode);
+
       setFormData({ name: "", email: "", phone: "" });
     } catch (err: any) {
       console.error("Error adding guest:", err);
       setError(err.response?.data?.message || "Gagal menambahkan tamu!");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const sendInvitation = async (guestId: number, guestName: string, guestEmail: string, qrCodeString: string) => {
+    try {
+      await api.post("/send-invitation", {
+        guest_id: guestId,
+        event_id: eventId,
+        guest_email: guestEmail,
+        guest_name: guestName,
+        event_name: event?.name || "Event QRvent",
+        event_desc: event?.description || "",
+        event_date: event?.date || "",
+        event_startTime: event?.startTime || "",
+        event_location: event?.location || "",
+        qr_data: qrCodeString,
+      });
+      console.log(`📩 Email undangan berhasil dikirim ke ${guestEmail}`);
+    } catch (err) {
+      console.error("Gagal mengirim email undangan via Resend:", err);
     }
   };
 
@@ -192,7 +224,7 @@ export default function AddGuestPage() {
         <Navbar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} userName={userName} />
 
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
-          
+
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
             <Link href="/dashboard/guests" className="hover:text-blue-600 transition">Daftar Tamu</Link>
             <span>/</span>

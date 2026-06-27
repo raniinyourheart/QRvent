@@ -188,7 +188,7 @@ function FaqItem({ q, a, delay }: { q: string; a: string; delay: number }) {
 // ══════════════════════════════════════════════════════════════════════════
 // MAIN
 // ══════════════════════════════════════════════════════════════════════════
-export default function QRevntLanding() {
+export default function QRventLanding() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -243,12 +243,12 @@ export default function QRevntLanding() {
   ];
 
   const faqs = [
-    { q: "Apakah QRevnt benar-benar gratis?", a: "Ya! QRevnt gratis untuk event kampus, komunitas, dan UMKM. Kami berencana menghadirkan paket premium dengan fitur lanjutan untuk skala korporat di masa mendatang, namun paket dasar akan selalu gratis." },
-    { q: "Bagaimana jika internet di lokasi mati saat acara berlangsung?", a: "Tenang — QRevnt menggunakan arsitektur Offline-First. Data scan tersimpan di memori lokal perangkat staf dan otomatis tersinkronisasi ke server begitu jaringan kembali tersedia." },
+    { q: "Apakah QRvent benar-benar gratis?", a: "Ya! QRvent gratis untuk event kampus, komunitas, dan UMKM. Kami berencana menghadirkan paket premium dengan fitur lanjutan untuk skala korporat di masa mendatang, namun paket dasar akan selalu gratis." },
+    { q: "Bagaimana jika internet di lokasi mati saat acara berlangsung?", a: "Tenang — QRvent menggunakan arsitektur Offline-First. Data scan tersimpan di memori lokal perangkat staf dan otomatis tersinkronisasi ke server begitu jaringan kembali tersedia." },
     { q: "Apakah peserta perlu install aplikasi untuk check-in?", a: "Tidak sama sekali. Peserta cukup menunjukkan QR code yang dikirim ke email mereka, lalu staf scan lewat browser biasa tanpa install apapun." },
-    { q: "Berapa banyak peserta yang bisa ditangani?", a: "QRevnt dirancang untuk menangani event dari puluhan hingga ribuan peserta. Sistem pemindaian berbasis browser kami mampu memproses check-in dalam waktu kurang dari 3 detik per peserta." },
+    { q: "Berapa banyak peserta yang bisa ditangani?", a: "QRvent dirancang untuk menangani event dari puluhan hingga ribuan peserta. Sistem pemindaian berbasis browser kami mampu memproses check-in dalam waktu kurang dari 3 detik per peserta." },
     { q: "Apakah data peserta aman?", a: "Sangat aman. Platform kami menggunakan Role-Based Access Control, URL Token terenkripsi untuk scanner, dan seluruh komunikasi dienkripsi via SSL/HTTPS sehingga data pribadi peserta terlindungi sepenuhnya." },
-    { q: "Bisakah QRevnt diintegrasikan dengan sistem lain?", a: "QRevnt dirancang modular dan mendukung SDG 17 (Kemitraan). Integrasi dengan WhatsApp Business API sedang dalam roadmap jangka pendek, dan kami terbuka untuk kolaborasi dengan platform undangan digital lainnya." },
+    { q: "Bisakah QRvent diintegrasikan dengan sistem lain?", a: "QRvent dirancang modular dan mendukung SDG 17 (Kemitraan). Integrasi dengan WhatsApp Business API sedang dalam roadmap jangka pendek, dan kami terbuka untuk kolaborasi dengan platform undangan digital lainnya." },
   ];
 
   const team = [
@@ -309,7 +309,7 @@ export default function QRevntLanding() {
       >
         <a href="#beranda" className="flex items-center gap-2 text-xl font-bold">
           <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-          QR<span className="text-blue-400">evnt</span>
+          QR<span className="text-blue-400">vent</span>
         </a>
 
         <div className="hidden md:flex items-center gap-6">
@@ -360,7 +360,7 @@ export default function QRevntLanding() {
                 Tanpa Ribet.
               </h1>
               <p className="text-gray-400 text-lg mb-8 max-w-md">
-                QRevnt mengubah registrasi peserta dari 20 menit antrean panjang menjadi
+                QRvent mengubah registrasi peserta dari 20 menit antrean panjang menjadi
                 3 detik scan QR — tanpa install aplikasi, tanpa login staf, tanpa batas.
               </p>
               <div className="flex gap-4 flex-wrap">
@@ -420,7 +420,7 @@ export default function QRevntLanding() {
               Satu Platform,<br />Semua Kebutuhan Event
             </h2>
             <p className="text-gray-400 max-w-xl mx-auto">
-              Dari check-in cepat hingga evaluasi pasca-acara — QRevnt menyediakan
+              Dari check-in cepat hingga evaluasi pasca-acara — QRvent menyediakan
               ekosistem lengkap yang bekerja bahkan tanpa sinyal internet.
             </p>
           </div>
@@ -502,10 +502,10 @@ export default function QRevntLanding() {
             <div className="text-sm font-bold text-blue-400 uppercase tracking-wider mb-2">
               Perbandingan
             </div>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">QRevnt vs Solusi Lain</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">QRvent vs Solusi Lain</h2>
             <p className="text-gray-400 max-w-xl mx-auto">
               Platform lain memaksa install app, bergantung internet, dan tagih biaya mahal.
-              QRevnt hadir untuk semua — dari kampus hingga UMKM.
+              QRvent hadir untuk semua — dari kampus hingga UMKM.
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -516,7 +516,7 @@ export default function QRevntLanding() {
                   <th className="py-3 px-4 text-sm font-bold text-gray-400">Buku Fisik</th>
                   <th className="py-3 px-4 text-sm font-bold text-gray-400">Eventbrite</th>
                   <th className="py-3 px-4 text-sm font-bold text-gray-400">Whova</th>
-                  <th className="py-3 px-4 text-sm font-bold text-blue-400 bg-blue-500/10 rounded-t-lg">QRevnt ✦</th>
+                  <th className="py-3 px-4 text-sm font-bold text-blue-400 bg-blue-500/10 rounded-t-lg">QRvent ✦</th>
                 </tr>
               </thead>
               <tbody>
@@ -565,7 +565,7 @@ export default function QRevntLanding() {
                 🏛️ Politeknik Negeri Batam
               </div>
               <p className="text-gray-400 leading-relaxed mb-4">
-                QRevnt lahir dari masalah nyata yang kami rasakan sendiri saat menyelenggarakan
+                QRvent lahir dari masalah nyata yang kami rasakan sendiri saat menyelenggarakan
                 seminar mahasiswa — antrean panjang, data kehadiran yang harus direkap manual berjam-jam,
                 dan tidak ada sistem yang cocok untuk kantong mahasiswa.
               </p>
@@ -612,7 +612,7 @@ export default function QRevntLanding() {
               Pertanyaan yang<br />Sering Ditanyakan
             </h2>
             <p className="text-gray-400">
-              Masih ada yang mengganjal? Berikut jawaban atas pertanyaan paling umum seputar QRevnt.
+              Masih ada yang mengganjal? Berikut jawaban atas pertanyaan paling umum seputar QRvent.
             </p>
           </div>
           <div className="space-y-3">

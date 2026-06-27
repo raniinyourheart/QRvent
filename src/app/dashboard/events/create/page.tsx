@@ -55,14 +55,14 @@ export default function CreateEventPage() {
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [createdEvent, setCreatedEvent] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"manual" | "excel">("excel");
-  
+
   // Excel import
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [excelData, setExcelData] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedGuests, setGeneratedGuests] = useState<any[]>([]);
   const [showResultModal, setShowResultModal] = useState(false);
-  
+
   // Form data event
   const [formData, setFormData] = useState({
     name: "",
@@ -84,11 +84,11 @@ export default function CreateEventPage() {
   // Helper: cek apakah jam yang dipilih sudah lewat
   const isTimeValid = (date: string, time: string) => {
     if (!date || !time) return true;
-    
+
     const selectedDate = new Date(date);
     const todayDate = new Date();
     todayDate.setHours(0, 0, 0, 0);
-    
+
     // Jika tanggal yang dipilih adalah hari ini
     if (selectedDate.getTime() === todayDate.getTime()) {
       const now = new Date();
@@ -133,7 +133,7 @@ export default function CreateEventPage() {
       const workbook = XLSX.read(data, { type: "array" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet);
-      
+
       const validGuests = rows.filter((row: any) => {
         return (row.Nama || row.name) && (row.Email || row.email);
       }).map((row: any, index) => ({
@@ -143,7 +143,7 @@ export default function CreateEventPage() {
         phone: row.Telepon || row.phone || "",
         status: "pending",
       }));
-      
+
       setExcelData(validGuests);
       if (validGuests.length === 0) {
         alert("Format Excel tidak sesuai. Gunakan kolom: Nama, Email, Telepon");
@@ -162,7 +162,7 @@ export default function CreateEventPage() {
 
     setIsGenerating(true);
     const guestsWithQR = [];
-    
+
     for (const guest of excelData) {
       const qrCode = `QR${Date.now()}${Math.floor(Math.random() * 10000)}`;
       const qrData = JSON.stringify({
@@ -173,13 +173,13 @@ export default function CreateEventPage() {
         eventName: createdEvent?.name,
         qrCode: qrCode,
       });
-      
+
       const qrImage = await QRCode.toDataURL(qrData, {
         width: 200,
         margin: 1,
         color: { dark: "#3b82f6", light: "#ffffff" },
       });
-      
+
       try {
         await api.post("/guests", {
           eventId: createdEvent.id,
@@ -191,7 +191,7 @@ export default function CreateEventPage() {
       } catch (error) {
         console.error("Error saving guest:", error);
       }
-      
+
       guestsWithQR.push({
         ...guest,
         qrImage,
@@ -199,7 +199,7 @@ export default function CreateEventPage() {
         generatedAt: new Date().toISOString(),
       });
     }
-    
+
     setGeneratedGuests(guestsWithQR);
     setIsGenerating(false);
     setShowResultModal(true);
@@ -213,25 +213,25 @@ export default function CreateEventPage() {
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-    
+
     if (!formData.name.trim()) newErrors.name = "Nama event harus diisi";
     if (!formData.date) newErrors.date = "Tanggal event harus diisi";
     if (formData.date < today) newErrors.date = "Tidak bisa membuat event di tanggal yang sudah lewat!";
-    
+
     if (!formData.startTime) {
       newErrors.startTime = "Waktu mulai harus diisi";
     } else if (formData.date === today && !isTimeValid(formData.date, formData.startTime)) {
       newErrors.startTime = "Tidak bisa memilih jam yang sudah lewat!";
     }
-    
+
     if (!formData.endTime) {
       newErrors.endTime = "Waktu selesai harus diisi";
     }
-    
+
     if (!formData.location.trim()) newErrors.location = "Lokasi harus diisi";
     if (formData.capacity < 1) newErrors.capacity = "Kapasitas minimal 1";
     if (!formData.description.trim()) newErrors.description = "Deskripsi event harus diisi";
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -244,8 +244,12 @@ export default function CreateEventPage() {
     }
 
     setIsSubmitting(true);
-    
+
     try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const currentUserId = user.id;
+      console.log(user);
+
       const response = await api.post("/events", {
         name: formData.name,
         type: formData.type,
@@ -258,8 +262,9 @@ export default function CreateEventPage() {
         capacity: formData.capacity,
         description: formData.description,
         isPublic: formData.isPublic,
+        userId: currentUserId,
       });
-      
+
       const newEvent = response.data;
       setCreatedEvent({ id: newEvent.id, name: formData.name });
       setIsSubmitting(false);
@@ -292,7 +297,7 @@ export default function CreateEventPage() {
         <Navbar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} userName={userName} />
 
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
-          
+
           <div className="flex items-center gap-4 mb-6">
             <button onClick={() => router.back()} className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition">
               <ArrowLeft size={20} />
@@ -304,7 +309,7 @@ export default function CreateEventPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            
+
             {/* Preview */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
@@ -399,54 +404,54 @@ export default function CreateEventPage() {
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div>
-                  <input 
-                    type="date" 
-                    name="date" 
-                    value={formData.date} 
-                    onChange={handleChange} 
+                  <input
+                    type="date"
+                    name="date"
+                    value={formData.date}
+                    onChange={handleChange}
                     min={today}
-                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.date ? "border-red-400" : "border-gray-200"}`} 
+                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.date ? "border-red-400" : "border-gray-200"}`}
                   />
                   {errors.date && <p className="text-xs text-red-500 mt-1">{errors.date}</p>}
                 </div>
                 <div>
-                  <input 
-                    type="time" 
-                    name="startTime" 
-                    value={formData.startTime} 
-                    onChange={handleChange} 
-                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.startTime ? "border-red-400" : "border-gray-200"}`} 
+                  <input
+                    type="time"
+                    name="startTime"
+                    value={formData.startTime}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.startTime ? "border-red-400" : "border-gray-200"}`}
                   />
                   {errors.startTime && <p className="text-xs text-red-500 mt-1">{errors.startTime}</p>}
                 </div>
                 <div>
-                  <input 
-                    type="time" 
-                    name="endTime" 
-                    value={formData.endTime} 
-                    onChange={handleChange} 
-                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.endTime ? "border-red-400" : "border-gray-200"}`} 
+                  <input
+                    type="time"
+                    name="endTime"
+                    value={formData.endTime}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.endTime ? "border-red-400" : "border-gray-200"}`}
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <input 
-                    type="text" 
-                    name="location" 
-                    value={formData.location} 
-                    onChange={handleChange} 
-                    placeholder="Lokasi / Link Meeting *" 
-                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.location ? "border-red-400" : "border-gray-200"}`} 
+                  <input
+                    type="text"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleChange}
+                    placeholder="Lokasi / Link Meeting *"
+                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.location ? "border-red-400" : "border-gray-200"}`}
                   />
                 </div>
                 <div>
-                  <input 
-                    type="number" 
-                    name="capacity" 
-                    value={formData.capacity} 
-                    onChange={handleChange} 
-                    min={1} 
-                    placeholder="Kapasitas" 
-                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.capacity ? "border-red-400" : "border-gray-200"}`} 
+                  <input
+                    type="number"
+                    name="capacity"
+                    value={formData.capacity}
+                    onChange={handleChange}
+                    min={1}
+                    placeholder="Kapasitas"
+                    className={`w-full px-4 py-2.5 border rounded-xl ${errors.capacity ? "border-red-400" : "border-gray-200"}`}
                   />
                 </div>
               </div>
@@ -458,22 +463,22 @@ export default function CreateEventPage() {
                 <Tag size={18} className="text-blue-600" />
                 Deskripsi Event
               </h2>
-              <textarea 
-                name="description" 
-                value={formData.description} 
-                onChange={handleChange} 
-                rows={5} 
-                placeholder="Deskripsi event..." 
-                className={`w-full px-4 py-2.5 border rounded-xl ${errors.description ? "border-red-400" : "border-gray-200"}`} 
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                rows={5}
+                placeholder="Deskripsi event..."
+                className={`w-full px-4 py-2.5 border rounded-xl ${errors.description ? "border-red-400" : "border-gray-200"}`}
               />
             </div>
 
             {/* Tombol Submit */}
             <div className="flex gap-4 pt-4">
               <button type="button" onClick={() => router.back()} className="flex-1 px-6 py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">Batal</button>
-              <button 
-                type="submit" 
-                disabled={isSubmitting} 
+              <button
+                type="submit"
+                disabled={isSubmitting}
                 className="flex-1 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white hover:shadow-lg disabled:opacity-70 flex items-center justify-center gap-2"
               >
                 {isSubmitting ? <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Menyimpan...</> : <><Save size={18} /> Simpan Event</>}
@@ -494,7 +499,7 @@ export default function CreateEventPage() {
               </div>
               <button onClick={handleSkip} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
-            
+
             <div className="p-5">
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-5">
                 <div className="flex items-center gap-2 text-green-700">
@@ -588,7 +593,7 @@ export default function CreateEventPage() {
                 <button onClick={() => { setShowResultModal(false); router.push("/dashboard/events"); }} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
               </div>
             </div>
-            
+
             <div className="p-5">
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-5 text-center">
                 <p className="text-green-700">✅ {generatedGuests.length} QR Code berhasil dibuat</p>

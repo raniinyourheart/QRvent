@@ -387,21 +387,21 @@ export default function AuthPage() {
           className={`
             absolute top-0 h-full w-[40%] flex items-center
             transition-all duration-[1500ms] ease-[cubic-bezier(0.25,0.46,0.45,0.94)]
-            ${isSignUp ? "left-0" : "right-0"}
+            ${isSignUp ? "left-0" : "left-[60%]"}
           `}
         >
           <div className={`px-16 text-white ${isSignUp ? "pl-16" : "text-right pr-16 ml-auto"}`}>
             <h1 className="text-6xl font-bold leading-tight drop-shadow-[0_0_25px_rgba(59,130,246,0.8)]">
-              WELCOME
+              {isSignUp ? "Register" : "Welcome"}
               <br />
-              BACK!
+              {isSignUp ? "to QRvent" : "Back"}
             </h1>
             <p className="mt-6 text-xl text-white/80">
-              Sign in to continue
+              {isSignUp ? "Sign up to QRvent" : "Sign in to continue"}
               <br />
-              managing your events
+              {isSignUp ? "now to manage your events" : "managing your events"}
               <br />
-              seamlessly
+              {isSignUp ? "seamlessly" : "seamlessly"}
             </p>
           </div>
         </div>

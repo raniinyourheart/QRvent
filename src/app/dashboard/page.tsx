@@ -144,6 +144,7 @@ export default function DashboardPage() {
         ]);
 
         // Update data grafik garis (tren per event)
+        console.log(eventsData);
         const trend = eventsData.slice(0, 5).map((event: Event) => {
           const guests = event.guests || [];
           const attended = guests.filter((g: Guest) => g.status === "checked_in").length;
@@ -153,6 +154,7 @@ export default function DashboardPage() {
             attended: attended,
           };
         });
+        
         
         if (trend.length > 0) {
           setTrendData(trend);

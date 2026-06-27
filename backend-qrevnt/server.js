@@ -5,6 +5,7 @@ const mysql = require('mysql2');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Resend } = require('resend');
+const QRCode = require('qrcode');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -133,20 +134,20 @@ app.post('/api/auth/login', async (req, res) => {
 // Endpoint: Kirim OTP
 app.post('/api/send-otp', async (req, res) => {
   const { email } = req.body;
-  
+
   if (!email) {
     return res.status(400).json({ message: 'Email required!' });
   }
-  
+
   // Generate 6 digit OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  
+
   // Simpan OTP dengan expiry 10 menit
   otpStore.set(email, {
     code: otp,
     expiresAt: Date.now() + 10 * 60 * 1000,
   });
-  
+
   try {
     const { data, error } = await resend.emails.send({
       from: 'Acme <onboarding@resend.dev>', // Resend punya domain gratis ini
@@ -191,12 +192,12 @@ app.post('/api/send-otp', async (req, res) => {
         </html>
       `,
     });
-    
+
     if (error) {
       console.error('Resend error:', error);
       return res.status(500).json({ message: 'Failed to send OTP' });
     }
-    
+
     console.log(`📧 OTP ${otp} sent to ${email}`);
     res.json({ message: 'OTP sent successfully', email: email });
   } catch (error) {
@@ -208,26 +209,26 @@ app.post('/api/send-otp', async (req, res) => {
 // Endpoint: Verify OTP
 app.post('/api/verify-otp', async (req, res) => {
   const { email, otp } = req.body;
-  
+
   if (!email || !otp) {
     return res.status(400).json({ message: 'Email and OTP required!' });
   }
-  
+
   const storedData = otpStore.get(email);
-  
+
   if (!storedData) {
     return res.status(400).json({ message: 'No OTP found. Please request a new code.' });
   }
-  
+
   if (Date.now() > storedData.expiresAt) {
     otpStore.delete(email);
     return res.status(400).json({ message: 'OTP has expired. Please request a new code.' });
   }
-  
+
   if (storedData.code !== otp) {
     return res.status(400).json({ message: 'Invalid OTP code!' });
   }
-  
+
   otpStore.delete(email);
   res.json({ message: 'OTP verified successfully' });
 });
@@ -235,8 +236,51 @@ app.post('/api/verify-otp', async (req, res) => {
 // ========== EVENT ROUTES ==========
 app.get('/api/events', async (req, res) => {
   try {
-    const [events] = await promiseDb.query('SELECT * FROM events ORDER BY date DESC');
-    res.json(events);
+    const [rows] = await promiseDb.query(`
+      SELECT e.*, 
+             g.id as guest_id, 
+             g.name as guest_name, 
+             g.status as guest_status
+      FROM events e
+      LEFT JOIN guests g ON e.id = g.eventId
+      ORDER BY e.date DESC
+    `);
+
+    const eventsMap = rows.reduce((acc, row) => {
+      if (!acc[row.id]) {
+        acc[row.id] = {
+          id: row.id,
+          userId: row.userId,
+          name: row.name,
+          type: row.type,
+          theme: row.theme,
+          date: row.date,
+          startTime: row.startTime,
+          endTime: row.endTime,
+          location: row.location,
+          locationType: row.locationType,
+          capacity: row.capacity,
+          description: row.description,
+          isPublic: row.isPublic,
+          bannerUrl: row.bannerUrl,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          guests: []
+        };
+      }
+
+      if (row.guest_id) {
+        acc[row.id].guests.push({
+          id: row.guest_id,
+          name: row.guest_name,
+          status: row.guest_status
+        });
+      }
+
+      return acc;
+    }, {});
+
+    res.json(Object.values(eventsMap));
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Terjadi kesalahan pada server' });
@@ -270,7 +314,7 @@ app.post('/api/events', async (req, res) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const eventDate = new Date(date);
-  
+
   if (eventDate < today) {
     return res.status(400).json({ message: 'Tidak bisa membuat event di tanggal yang sudah lewat!' });
   }
@@ -292,7 +336,7 @@ app.post('/api/events', async (req, res) => {
         name, type || 'seminar', theme || 'purple', date,
         startTime || null, endTime || null, location,
         locationType || 'offline', capacity || 100,
-        description || '', isPublic !== undefined ? isPublic : 1, userId || 1,
+        description || '', isPublic !== undefined ? isPublic : 1, userId,
       ]
     );
     res.status(201).json({ id: result.insertId, message: 'Event berhasil dibuat' });
@@ -360,6 +404,140 @@ app.post('/api/guests', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+});
+
+app.post('/api/send-invitation', async (req, res) => {
+  const {
+    guest_email,
+    guest_name,
+    event_name,
+    event_desc,
+    event_date,
+    event_startTime,
+    event_location,
+    qr_data,
+    guest_id
+  } = req.body;
+
+  const eventId = req.body.event_id || 9;
+  const currentGuestId = guest_id || 11;
+
+  try {
+    const qrJsonObject = {
+      id: Number(currentGuestId),
+      name: guest_name,
+      email: guest_email,
+      eventId: Number(eventId),
+      eventName: event_name,
+      qrCode: qr_data
+    };
+
+    const qrStringData = JSON.stringify(qrJsonObject);
+
+    const qrBuffer = await QRCode.toBuffer(qrStringData, {
+      width: 250,
+      margin: 1
+    });
+
+    const feedbackUrl = `http://localhost:3000/events/${eventId}?guest=${currentGuestId}`;
+
+    const { data, error } = await resend.emails.send({
+      from: 'QRvent Ticket <onboarding@resend.dev>',
+      to: [guest_email],
+      subject: `🎟️ E-Tiket Resmi: ${event_name}`,
+      attachments: [
+        {
+          filename: 'ticket-qrcode.png',
+          content: qrBuffer
+        }
+      ],
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f8fafc; padding: 20px; color: #1e293b; }
+            .ticket-card { max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden; border: 1px solid #e2e8f0; }
+            .ticket-header { background: #4f46e5; color: #ffffff; padding: 20px; text-align: center; }
+            .ticket-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
+            .ticket-body { padding: 20px; }
+            .guest-name { font-size: 18px; font-weight: bold; text-align: center; color: #1e293b; margin: 10px 0 20px 0; border-bottom: 1px dashed #e2e8f0; padding-bottom: 15px; }
+            .info-table { width: 100%; font-size: 14px; margin-bottom: 15px; }
+            .info-table td { padding: 6px 0; }
+            .label { color: #64748b; font-weight: 500; width: 30%; }
+            .value { color: #334155; font-weight: 600; }
+            .desc-box { background: #f1f5f9; padding: 12px; border-radius: 6px; font-size: 13px; color: #475569; margin-top: 10px; line-height: 1.4; }
+            .qr-section { text-align: center; margin-top: 25px; padding-top: 20px; border-top: 2px dashed #cbd5e1; }
+            .feedback-section { text-align: center; margin-top: 20px; padding: 15px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; }
+            .feedback-btn { display: inline-block; padding: 10px 20px; background-color: #16a34a; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 6px; margin-top: 8px; }
+            .footer-note { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 15px; }
+          </style>
+        </head>
+        <body>
+
+          <div class="ticket-card">
+            <div class="ticket-header">
+              <h2>${event_name}</h2>
+            </div>
+            
+            <div class="ticket-body">
+              <div class="guest-name">
+                <span style="font-size: 11px; color: #94a3b8; display: block; font-weight: normal; margin-bottom: 2px;">NAMA TAMU</span>
+                ${guest_name}
+              </div>
+
+              <table class="info-table">
+                <tr>
+                  <td class="label">📅 Tanggal</td>
+                  <td class="value">${event_date || '-'}</td>
+                </tr>
+                <tr>
+                  <td class="label">⏰ Waktu</td>
+                  <td class="value">${event_startTime || 'Selesai'} WIB</td>
+                </tr>
+                <tr>
+                  <td class="label">📍 Lokasi</td>
+                  <td class="value">${event_location || '-'}</td>
+                </tr>
+              </table>
+
+              <div class="desc-box">
+                <strong>Deskripsi:</strong><br>
+                ${event_desc || 'Tidak ada deskripsi untuk event ini.'}
+              </div>
+
+              <div class="qr-section">
+                <p style="margin: 0 0 5px 0; font-size: 12px; font-weight: bold; color: #4f46e5;">QR CODE TERLAMPIR DI EMAIL</p>
+                <p style="margin: 0; font-size: 10px; font-family: monospace; color: #94a3b8;">Code: ${qr_data}</p>
+              </div>
+
+              <div class="feedback-section">
+                <p style="margin: 0; font-size: 12px; color: #166534; font-weight: 500;">Setelah menghadiri acara, mohon luangkan waktu untuk memberikan feedback melalui tautan di bawah ini:</p>
+                <a href="${feedbackUrl}" class="feedback-btn">Isi Feedback Acara</a>
+              </div>
+              
+              <div class="footer-note">
+                *Silakan unduh file QR Code yang terlampir pada email ini untuk ditunjukkan ke panitia saat check-in di lokasi event.
+              </div>
+            </div>
+          </div>
+
+        </body>
+        </html>
+      `
+    });
+
+    if (error) {
+      console.error('Error dari Resend API:', error);
+      return res.status(500).json({ message: 'Gagal mengirim email via Resend' });
+    }
+
+    res.status(200).json({ message: 'E-Tiket dan QR Code berhasil dikirim!' });
+
+  } catch (err) {
+    console.error('Sistem error:', err);
+    res.status(500).json({ message: 'Terjadi kesalahan internal server' });
   }
 });
 
@@ -432,6 +610,153 @@ app.get('/api/feedbacks', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+});
+
+app.get('/api/feedbacks', async (req, res) => {
+  const { eventId, guestId } = req.query;
+
+  if (!eventId || !guestId) {
+    return res.status(400).json({ message: 'Parameter tidak lengkap' });
+  }
+
+  try {
+    const [guests] = await promiseDb.query(
+      'SELECT name, email, status FROM guests WHERE id = ? AND eventId = ? LIMIT 1',
+      [Number(guestId), Number(eventId)]
+    );
+
+    if (guests.length === 0) {
+      return res.status(404).json({ message: 'Data tamu tidak ditemukan' });
+    }
+
+    const guest = guests[0];
+
+    if (guest.status !== 'checked_in') {
+      return res.status(403).json({ 
+        message: 'Dikarenakan anda tidak hadir, anda tidak bisa mengisi feedbacks' 
+      });
+    }
+
+    const [feedbacks] = await promiseDb.query(
+      'SELECT id FROM feedbacks WHERE eventId = ? AND guestId = ? LIMIT 1',
+      [Number(eventId), Number(guestId)]
+    );
+
+    const hasSubmitted = feedbacks.length > 0;
+
+    res.status(200).json({
+      hasSubmitted,
+      guestName: guest.name,
+      guestEmail: guest.email
+    });
+
+  } catch (error) {
+    console.error('Error checking feedback status:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server' });
+  }
+});
+
+app.get('/api/feedbacks/check', async (req, res) => {
+  const { eventId, guestId } = req.query;
+
+  if (!eventId || !guestId) {
+    return res.status(400).json({ message: 'Parameter tidak lengkap.' });
+  }
+
+  try {
+    const [guests] = await promiseDb.query(
+      'SELECT name, email, status FROM guests WHERE id = ? AND eventId = ? LIMIT 1',
+      [Number(guestId), Number(eventId)]
+    );
+
+    if (guests.length === 0) {
+      return res.status(404).json({ message: 'Data tamu tidak ditemukan.' });
+    }
+
+    const guest = guests[0];
+
+    if (guest.status !== 'checked_in') {
+      return res.status(403).json({ 
+        message: 'Dikarenakan anda tidak hadir, anda tidak bisa mengisi feedbacks.' 
+      });
+    }
+
+    const [feedbacks] = await promiseDb.query(
+      'SELECT id FROM feedbacks WHERE eventId = ? AND guestId = ? LIMIT 1',
+      [Number(eventId), Number(guestId)]
+    );
+
+    const hasSubmitted = feedbacks.length > 0;
+
+    res.status(200).json({
+      hasSubmitted,
+      guestName: guest.name,
+      guestEmail: guest.email
+    });
+
+  } catch (error) {
+    console.error('Error feedback check:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server.' });
+  }
+});
+
+app.post('/api/feedback', async (req, res) => {
+  const { eventId, guestId, guestName, guestEmail, rating, comment } = req.body;
+
+  if (!eventId || !guestName || !guestEmail || !rating) {
+    return res.status(400).json({ message: 'Semua kolom wajib diisi dengan benar.' });
+  }
+
+  const parsedRating = Number(rating);
+  if (parsedRating < 1 || parsedRating > 5) {
+    return res.status(400).json({ message: 'Rating harus berkisar antara 1 sampai 5.' });
+  }
+
+  try {
+    if (guestId) {
+      const [guests] = await promiseDb.query(
+        'SELECT status FROM guests WHERE id = ? AND eventId = ? LIMIT 1',
+        [Number(guestId), Number(eventId)]
+      );
+
+      if (guests.length === 0) {
+        return res.status(404).json({ message: 'Data tamu tidak valid.' });
+      }
+
+      if (guests[0].status !== 'checked_in') {
+        return res.status(403).json({ 
+          message: 'Dikarenakan anda tidak hadir, anda tidak bisa mengisi feedbacks.' 
+        });
+      }
+
+      const [existingFeedback] = await promiseDb.query(
+        'SELECT id FROM feedbacks WHERE eventId = ? AND guestId = ? LIMIT 1',
+        [Number(eventId), Number(guestId)]
+      );
+
+      if (existingFeedback.length > 0) {
+        return res.status(400).json({ message: 'Anda sudah mengirimkan feedback untuk acara ini.' });
+      }
+    }
+
+    await promiseDb.query(
+      'INSERT INTO feedbacks (eventId, guestId, guestName, guestEmail, rating, comment, createdAt) VALUES (?, ?, ?, ?, ?, ?, NOW())',
+      [
+        Number(eventId),
+        guestId ? Number(guestId) : null,
+        guestName.trim(),
+        guestEmail.trim(),
+        parsedRating,
+        comment ? comment.trim() : ''
+      ]
+    );
+
+    res.status(201).json({ message: 'Feedback berhasil dikirim. Terima kasih!' });
+
+  } catch (error) {
+    console.error('Error submitting feedback:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan pada server saat mengirim feedback.' });
   }
 });
 
