@@ -3,19 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  Gift,
-  Plus,
-  Trash2,
-  Trophy,
-  Users,
-  Sparkles,
-  RefreshCw,
-  CheckCircle,
-  Ticket,
-  Award,
-  PartyPopper,
-} from "lucide-react";
+
+
 import Sidebar from "@/components/Sidebar";
 import Navbar from "@/components/Navbar";
 import api from "@/lib/api";
