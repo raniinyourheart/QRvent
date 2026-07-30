@@ -16,9 +16,7 @@ import {
   Award,
   PartyPopper,
 } from "lucide-react";
-import Sidebar from "@/components/Sidebar";
-import Navbar from "@/components/Navbar";
-import api from "@/lib/api";
+
 
 // Tipe data
 interface Prize {
