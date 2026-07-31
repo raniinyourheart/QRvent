@@ -1,6 +1,13 @@
 "use client";
 
+import Link from "next/link";
+import { Menu, User } from "lucide-react";
 
+interface NavbarProps {
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+  userName: string;
+}
 
 export default function Navbar({ sidebarOpen, setSidebarOpen, userName }: NavbarProps) {
   return (
