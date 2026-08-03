@@ -21,7 +21,18 @@ export default function RootLayout({
 }>) {
   const [theme, setTheme] = useState("light");
 
-
+  useEffect(() => {
+    // Ambil tema dari localStorage
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme) {
+      setTheme(savedTheme);
+      if (savedTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    }
+  }, []);
 
   return (
     <html lang="id" className={theme === "dark" ? "dark" : ""}>
