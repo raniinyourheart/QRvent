@@ -42,22 +42,7 @@ export const authAPI = {
   login: (data) => api.post('/auth/login', data),
 };
 
-// Event API
-export const eventAPI = {
-  getAll: () => api.get('/events'),
-  getById: (id) => api.get(`/events/${id}`),
-  create: (data) => api.post('/events', data),
-  update: (id, data) => api.put(`/events/${id}`, data),
-  delete: (id) => api.delete(`/events/${id}`),
-};
 
-// Guest API
-export const guestAPI = {
-  getByEvent: (eventId) => api.get(`/guests/${eventId}`),
-  create: (data) => api.post('/guests', data),
-  checkIn: (id) => api.patch(`/guests/${id}/checkin`),
-  delete: (id) => api.delete(`/guests/${id}`),
-};
 
 // Dashboard API
 export const dashboardAPI = {
