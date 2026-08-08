@@ -51,3 +51,17 @@ export const eventAPI = {
   delete: (id) => api.delete(`/events/${id}`),
 };
 
+// Guest API
+export const guestAPI = {
+  getByEvent: (eventId) => api.get(`/guests/${eventId}`),
+  create: (data) => api.post('/guests', data),
+  checkIn: (id) => api.patch(`/guests/${id}/checkin`),
+  delete: (id) => api.delete(`/guests/${id}`),
+};
+
+// Dashboard API
+export const dashboardAPI = {
+  getStats: () => api.get('/dashboard/stats'),
+};
+
+export default api;
